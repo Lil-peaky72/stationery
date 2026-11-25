@@ -1,7 +1,20 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
+import AdminPanel from './AdminPanel.jsx';
 import './styles.css';
+
+const isAdminRoute = () => ['#admin', '#/admin'].includes(window.location.hash);
+
+function Root() {
+  const [admin, setAdmin] = React.useState(isAdminRoute());
+  React.useEffect(() => {
+    const onHashChange = () => setAdmin(isAdminRoute());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+  return admin ? <AdminPanel /> : <App />;
+}
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -40,7 +53,7 @@ if (!rootElement) {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
       <AppErrorBoundary>
-        <App />
+        <Root />
       </AppErrorBoundary>
     </React.StrictMode>
   );

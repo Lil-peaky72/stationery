@@ -22,6 +22,14 @@ const services = [
   { icon: BookOpen, title: 'Binding & finishing', text: 'Neat spiral, comb and premium finishes for assignments and projects.' }
 ];
 
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_DOCUMENT_EXTENSIONS = ['pdf', 'doc', 'docx'];
+const DOCUMENT_CONTENT_TYPES = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+};
+
 const money = (amount) => new Intl.NumberFormat('en-TZ', {
   style: 'currency', currency: 'TZS', maximumFractionDigits: 0
 }).format(amount);
@@ -67,12 +75,47 @@ export default function App() {
       .filter((item) => item.quantity > 0));
   }
 
+  function flash(message, duration = 4000) {
+    setNotice(message);
+    window.setTimeout(() => setNotice(''), duration);
+  }
+
   async function submitOrder(event) {
     event.preventDefault();
-    setSavingOrder(true);
     const fields = new FormData(event.currentTarget);
+
+    // Hidden field that real customers never see; bots tend to fill it in.
+    if (fields.get('website')) return;
+
+    const file = fields.get('document');
+    const hasFile = orderType !== 'Stationery purchase' && file instanceof File && file.size > 0;
+    const extension = hasFile ? file.name.split('.').pop().toLowerCase() : '';
+    if (hasFile && !ALLOWED_DOCUMENT_EXTENSIONS.includes(extension)) {
+      flash('Please attach a PDF or Word document (.pdf, .doc, .docx).');
+      return;
+    }
+    if (hasFile && file.size > MAX_DOCUMENT_BYTES) {
+      flash('That file is larger than 10 MB. Please send a smaller file.');
+      return;
+    }
+
+    setSavingOrder(true);
+
+    let documentPath = null;
+    if (hasFile) {
+      documentPath = crypto.randomUUID() + '.' + extension;
+      const { error: uploadError } = await supabase.storage
+        .from('order-documents')
+        .upload(documentPath, file, { contentType: DOCUMENT_CONTENT_TYPES[extension], upsert: false });
+      if (uploadError) {
+        setSavingOrder(false);
+        flash('Could not upload your document. Please try again.');
+        return;
+      }
+    }
+
     const reference = 'STN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
-    const { error } = await supabase.from('orders').insert({
+    const order = {
       reference,
       customer_name: String(fields.get('customer_name') || '').trim(),
       registration_number: String(fields.get('registration_number') || '').trim() || null,
@@ -81,9 +124,12 @@ export default function App() {
       details: String(fields.get('details') || '').trim() || null,
       items: orderType === 'Stationery purchase' ? cart : [],
       total_amount: orderType === 'Stationery purchase' ? cartTotal : 0
-    });
+    };
+    if (documentPath) order.document_path = documentPath;
+
+    const { error } = await supabase.from('orders').insert(order);
     setSavingOrder(false);
-    if (error) { setNotice('Could not save your order. Please try again.'); window.setTimeout(() => setNotice(''), 4000); return; }
+    if (error) { flash('Could not save your order. Please try again.'); return; }
     setLastOrderReference(reference);
     setCart([]);
     setModal('submitted');
@@ -235,12 +281,15 @@ export default function App() {
           <div className="modal-header"><div><span className="eyebrow">STATIONERY / STUDENT SERVICES</span><h2>{modal === 'cart' ? 'Your bag' : modal === 'track' ? 'Track an order' : modal === 'support' ? "We're here to help" : modal === 'order' ? 'Start an order' : 'Your request'}</h2></div><button className="close-modal" onClick={() => setModal('')} aria-label="Close"><X /></button></div>
           {modal === 'cart' && <div className="cart-content">{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={32} /><h3>Your bag is waiting</h3><p>Add stationery essentials from the shop to see them here.</p><button className="button button-primary" onClick={() => { setModal(''); scrollTo('shop'); }}>Browse the shop</button></div> : <><div className="cart-items">{cart.map((item) => <div className="cart-row" key={item.id}><span className="cart-emoji">{item.icon}</span><div className="cart-item-name"><b>{item.name}</b><small>{money(item.price)} each</small></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)}><Minus size={13} /></button><span>{item.quantity}</span><button onClick={() => changeQuantity(item.id, 1)}><Plus size={13} /></button></div><b>{money(item.price * item.quantity)}</b></div>)}</div><div className="cart-total"><span>Estimated total</span><b>{money(cartTotal)}</b></div><p className="form-hint">Checkout and payment will be connected in a later development phase.</p><button className="button button-primary full-button" onClick={() => { setModal('order'); setOrderType('Stationery purchase'); }}>Continue with request <ArrowRight size={16} /></button></>}</div>}
           {modal === 'order' && <form className="order-form" onSubmit={submitOrder}>
-            <p className="form-intro">Tell us what you need. This prototype previews the request form; it does not yet send or store orders.</p>
+            <p className="form-intro">Tell us what you need. We will save your request and give you a tracking reference to follow its progress.</p>
             <label>What do you need?<select value={orderType} onChange={(e) => setOrderType(e.target.value)}><option>Printing</option><option>Photocopying</option><option>Binding & finishing</option><option>Stationery purchase</option></select></label>
             <label>Full name<input name="customer_name" required placeholder="Your name" /></label>
             <label>Student registration number <input name="registration_number" placeholder="e.g. T24-..." /></label>
             <label>Phone number <input name="phone" required type="tel" placeholder="+255 ..." /></label>
-            {orderType !== 'Stationery purchase' && <label>Document file <input type="file" accept=".pdf,.doc,.docx" /></label>}
+            {orderType !== 'Stationery purchase' && <label>Document file (PDF or Word, up to 10 MB) <input name="document" type="file" accept=".pdf,.doc,.docx" /></label>}
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}>
+              <label>Website <input name="website" tabIndex={-1} autoComplete="off" /></label>
+            </div>
             <label>Order details <textarea name="details" rows="3" placeholder="Number of pages, copies, colour or black & white, binding type..." /></label>
             <button className="button button-primary full-button" type="submit" disabled={savingOrder}>{savingOrder ? "Saving order..." : "Submit order"} <ArrowRight size={16} /></button>
           </form>}
