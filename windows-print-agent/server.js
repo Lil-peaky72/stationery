@@ -1,0 +1,16 @@
+import express from 'express';
+import cors from 'cors';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+const execFileAsync=promisify(execFile),app=express(),PORT=Number(process.env.PORT||4317),TOKEN=process.env.STATIONERY_PRINT_TOKEN;
+const SUMATRA=process.env.SUMATRA_PDF||'C:\\Program Files\\SumatraPDF\\SumatraPDF.exe';
+app.use(cors({origin:['https://stationery-peaky7.vercel.app','http://localhost:5173'],allowedHeaders:['Content-Type','x-stationery-token'],methods:['GET','POST','OPTIONS']}));
+app.use(express.json({limit:'1mb'}));
+app.use((req,res,next)=>{if(!TOKEN||req.headers['x-stationery-token']!==TOKEN)return res.status(401).json({error:'Invalid print-agent token'});next();});
+app.get('/health',(req,res)=>res.json({ok:true,platform:'Windows'}));
+app.get('/printers',async(req,res)=>{try{const {stdout}=await execFileAsync('powershell.exe',['-NoProfile','-Command','Get-Printer | Select-Object Name,PrinterStatus,PortName | ConvertTo-Json -Compress'],{windowsHide:true});const data=stdout.trim()?JSON.parse(stdout):[];res.json({printers:(Array.isArray(data)?data:[data]).map(p=>({name:p.Name,status:p.PrinterStatus,port:p.PortName}))});}catch(e){res.status(500).json({error:'Could not list Windows printers: '+e.message});}});
+app.post('/print',async(req,res)=>{const {url,printerName,copies=1}=req.body||{};if(!url||!printerName)return res.status(400).json({error:'PDF URL and printer are required'});if(!/^https:\/\//i.test(url))return res.status(400).json({error:'Only HTTPS PDF URLs are accepted'});const count=Math.max(1,Math.min(20,Number(copies)||1));let dir;try{const response=await fetch(url);if(!response.ok)throw Error('Could not download PDF ('+response.status+')');if(!(response.headers.get('content-type')||'').includes('pdf'))throw Error('Uploaded file is not a PDF');const bytes=Buffer.from(await response.arrayBuffer());if(bytes.length>20*1024*1024)throw Error('PDF exceeds 20 MB');dir=await mkdtemp(path.join(tmpdir(),'stationery-'));const file=path.join(dir,'job.pdf');await writeFile(file,bytes);for(let i=0;i<count;i++)await execFileAsync(SUMATRA,['-print-to',printerName,'-silent','-exit-on-print',file],{windowsHide:true,timeout:120000});res.json({ok:true,printer:printerName,copies:count});}catch(e){res.status(500).json({error:e.message||'Print failed'});}finally{if(dir)await rm(dir,{recursive:true,force:true}).catch(()=>{});}});
+app.listen(PORT,'127.0.0.1',()=>console.log('Stationery print agent listening at http://127.0.0.1:'+PORT));
