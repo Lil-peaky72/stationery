@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { supabase } from './lib/supabase.js';
 import DocumentStudio from './DocumentStudio.jsx';
 import {
   ArrowRight, BookOpen, Check, ChevronDown, Clock3, FileText,
@@ -33,6 +34,8 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [orderType, setOrderType] = useState('Printing');
   const [notice, setNotice] = useState('');
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [lastOrderReference, setLastOrderReference] = useState('');
 
   const categories = ['All', 'Books', 'Writing', 'Organisation', 'Study tools'];
   const visibleProducts = useMemo(() => products.filter((product) => {
@@ -59,6 +62,28 @@ export default function App() {
     setCart((current) => current
       .map((item) => item.id === id ? { ...item, quantity: item.quantity + amount } : item)
       .filter((item) => item.quantity > 0));
+  }
+
+  async function submitOrder(event) {
+    event.preventDefault();
+    setSavingOrder(true);
+    const fields = new FormData(event.currentTarget);
+    const reference = 'STN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+    const { error } = await supabase.from('orders').insert({
+      reference,
+      customer_name: String(fields.get('customer_name') || '').trim(),
+      registration_number: String(fields.get('registration_number') || '').trim() || null,
+      phone: String(fields.get('phone') || '').trim(),
+      order_type: orderType,
+      details: String(fields.get('details') || '').trim() || null,
+      items: orderType === 'Stationery purchase' ? cart : [],
+      total_amount: orderType === 'Stationery purchase' ? cartTotal : 0
+    });
+    setSavingOrder(false);
+    if (error) { setNotice('Could not save your order. Please try again.'); window.setTimeout(() => setNotice(''), 4000); return; }
+    setLastOrderReference(reference);
+    setCart([]);
+    setModal('submitted');
   }
 
   function openOrder(type) {
@@ -193,17 +218,17 @@ export default function App() {
         <div className="modal-panel">
           <div className="modal-header"><div><span className="eyebrow">STATIONERY / STUDENT SERVICES</span><h2>{modal === 'cart' ? 'Your bag' : modal === 'track' ? 'Track an order' : modal === 'support' ? "We're here to help" : modal === 'order' ? 'Start an order' : 'Your request'}</h2></div><button className="close-modal" onClick={() => setModal('')} aria-label="Close"><X /></button></div>
           {modal === 'cart' && <div className="cart-content">{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={32} /><h3>Your bag is waiting</h3><p>Add stationery essentials from the shop to see them here.</p><button className="button button-primary" onClick={() => { setModal(''); scrollTo('shop'); }}>Browse the shop</button></div> : <><div className="cart-items">{cart.map((item) => <div className="cart-row" key={item.id}><span className="cart-emoji">{item.icon}</span><div className="cart-item-name"><b>{item.name}</b><small>{money(item.price)} each</small></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)}><Minus size={13} /></button><span>{item.quantity}</span><button onClick={() => changeQuantity(item.id, 1)}><Plus size={13} /></button></div><b>{money(item.price * item.quantity)}</b></div>)}</div><div className="cart-total"><span>Estimated total</span><b>{money(cartTotal)}</b></div><p className="form-hint">Checkout and payment will be connected in a later development phase.</p><button className="button button-primary full-button" onClick={() => { setModal('order'); setOrderType('Stationery purchase'); }}>Continue with request <ArrowRight size={16} /></button></>}</div>}
-          {modal === 'order' && <form className="order-form" onSubmit={(e) => { e.preventDefault(); setModal('submitted'); }}>
+          {modal === 'order' && <form className="order-form" onSubmit={submitOrder}>
             <p className="form-intro">Tell us what you need. This prototype previews the request form; it does not yet send or store orders.</p>
             <label>What do you need?<select value={orderType} onChange={(e) => setOrderType(e.target.value)}><option>Printing</option><option>Photocopying</option><option>Binding & finishing</option><option>Stationery purchase</option></select></label>
-            <label>Full name<input required placeholder="Your name" /></label>
-            <label>Student registration number <input placeholder="e.g. T24-..." /></label>
-            <label>Phone number <input required type="tel" placeholder="+255 ..." /></label>
+            <label>Full name<input name="customer_name" required placeholder="Your name" /></label>
+            <label>Student registration number <input name="registration_number" placeholder="e.g. T24-..." /></label>
+            <label>Phone number <input name="phone" required type="tel" placeholder="+255 ..." /></label>
             {orderType !== 'Stationery purchase' && <label>Document file <input type="file" accept=".pdf,.doc,.docx" /></label>}
-            <label>Order details <textarea rows="3" placeholder="Number of pages, copies, colour or black & white, binding type..." /></label>
-            <button className="button button-primary full-button" type="submit">Review request <ArrowRight size={16} /></button>
+            <label>Order details <textarea name="details" rows="3" placeholder="Number of pages, copies, colour or black & white, binding type..." /></label>
+            <button className="button button-primary full-button" type="submit" disabled={savingOrder}>{savingOrder ? "Saving order..." : "Submit order"} <ArrowRight size={16} /></button>
           </form>}
-          {modal === 'submitted' && <div className="success-state"><span><Check size={25} /></span><h3>Request preview complete</h3><p>This is only a frontend demonstration. Your request has not been sent to a shop or saved yet.</p><button className="button button-primary" onClick={() => setModal('')}>Got it</button></div>}
+          {modal === 'submitted' && <div className="success-state"><span><Check size={25} /></span><h3>Order received</h3><p>Your order has been saved. Keep this tracking reference:</p><strong>{lastOrderReference}</strong><button className="button button-primary" onClick={() => setModal('')}>Got it</button></div>}
           {modal === 'track' && <form className="order-form" onSubmit={(e) => { e.preventDefault(); setNotice('Tracking will be available when order services are connected.'); setModal(''); window.setTimeout(() => setNotice(''), 3000); }}><p className="form-intro">Enter the reference given to you after your order is confirmed.</p><label>Order reference<input required placeholder="e.g. STN-000123" /></label><button className="button button-primary full-button">Check order status <ArrowRight size={16} /></button><p className="form-hint">Live tracking will be connected to the order database in a later phase.</p></form>}
           {modal === 'support' && <div className="support-content"><p>Need help choosing a service or preparing a document? Contact details will be added once the business phone number and support channel are confirmed.</p><div className="support-placeholder"><Headphones size={22} /><span>Student-friendly support is part of the plan.</span></div></div>}
         </div>
