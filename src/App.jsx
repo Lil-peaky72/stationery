@@ -72,6 +72,20 @@ export default function App() {
     setSavingOrder(true);
     const fields = new FormData(event.currentTarget);
     const reference = 'STN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+    const documentFile = fields.get('document_file');
+    let filePath = null;
+    if (orderType !== 'Stationery purchase') {
+      if (!documentFile || documentFile.size === 0 || documentFile.type !== 'application/pdf') {
+        setSavingOrder(false); setNotice('Please attach a PDF document.'); window.setTimeout(() => setNotice(''), 4000); return;
+      }
+      if (documentFile.size > 20 * 1024 * 1024) {
+        setSavingOrder(false); setNotice('PDF must be 20 MB or smaller.'); window.setTimeout(() => setNotice(''), 4000); return;
+      }
+      const safeName = documentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      filePath = reference + '/' + safeName;
+      const { error: uploadError } = await supabase.storage.from('print-jobs').upload(filePath, documentFile, { contentType: 'application/pdf', upsert: false });
+      if (uploadError) { setSavingOrder(false); setNotice('PDF upload failed. Please try again.'); window.setTimeout(() => setNotice(''), 4000); return; }
+    }
     const { error } = await supabase.from('orders').insert({
       reference,
       customer_name: String(fields.get('customer_name') || '').trim(),
@@ -80,7 +94,10 @@ export default function App() {
       order_type: orderType,
       details: String(fields.get('details') || '').trim() || null,
       items: orderType === 'Stationery purchase' ? cart : [],
-      total_amount: orderType === 'Stationery purchase' ? cartTotal : 0
+      total_amount: orderType === 'Stationery purchase' ? cartTotal : 0,
+      file_path: filePath,
+      file_name: filePath ? documentFile.name : null,
+      mime_type: filePath ? 'application/pdf' : null
     });
     setSavingOrder(false);
     if (error) { setNotice('Could not save your order. Please try again.'); window.setTimeout(() => setNotice(''), 4000); return; }
@@ -235,12 +252,12 @@ export default function App() {
           <div className="modal-header"><div><span className="eyebrow">STATIONERY / STUDENT SERVICES</span><h2>{modal === 'cart' ? 'Your bag' : modal === 'track' ? 'Track an order' : modal === 'support' ? "We're here to help" : modal === 'order' ? 'Start an order' : 'Your request'}</h2></div><button className="close-modal" onClick={() => setModal('')} aria-label="Close"><X /></button></div>
           {modal === 'cart' && <div className="cart-content">{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={32} /><h3>Your bag is waiting</h3><p>Add stationery essentials from the shop to see them here.</p><button className="button button-primary" onClick={() => { setModal(''); scrollTo('shop'); }}>Browse the shop</button></div> : <><div className="cart-items">{cart.map((item) => <div className="cart-row" key={item.id}><span className="cart-emoji">{item.icon}</span><div className="cart-item-name"><b>{item.name}</b><small>{money(item.price)} each</small></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)}><Minus size={13} /></button><span>{item.quantity}</span><button onClick={() => changeQuantity(item.id, 1)}><Plus size={13} /></button></div><b>{money(item.price * item.quantity)}</b></div>)}</div><div className="cart-total"><span>Estimated total</span><b>{money(cartTotal)}</b></div><p className="form-hint">Checkout and payment will be connected in a later development phase.</p><button className="button button-primary full-button" onClick={() => { setModal('order'); setOrderType('Stationery purchase'); }}>Continue with request <ArrowRight size={16} /></button></>}</div>}
           {modal === 'order' && <form className="order-form" onSubmit={submitOrder}>
-            <p className="form-intro">Tell us what you need. This prototype previews the request form; it does not yet send or store orders.</p>
+            <p className="form-intro">Tell us what you need and attach your PDF. Your order and document will be sent securely to the shop.</p>
             <label>What do you need?<select value={orderType} onChange={(e) => setOrderType(e.target.value)}><option>Printing</option><option>Photocopying</option><option>Binding & finishing</option><option>Stationery purchase</option></select></label>
             <label>Full name<input name="customer_name" required placeholder="Your name" /></label>
             <label>Student registration number <input name="registration_number" placeholder="e.g. T24-..." /></label>
             <label>Phone number <input name="phone" required type="tel" placeholder="+255 ..." /></label>
-            {orderType !== 'Stationery purchase' && <label>Document file <input type="file" accept=".pdf,.doc,.docx" /></label>}
+            {orderType !== 'Stationery purchase' && <label>PDF document (maximum 20 MB) <input name="document_file" type="file" accept="application/pdf,.pdf" required /></label>}
             <label>Order details <textarea name="details" rows="3" placeholder="Number of pages, copies, colour or black & white, binding type..." /></label>
             <button className="button button-primary full-button" type="submit" disabled={savingOrder}>{savingOrder ? "Saving order..." : "Submit order"} <ArrowRight size={16} /></button>
           </form>}
