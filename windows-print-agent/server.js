@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 const execFileAsync=promisify(execFile),app=express(),PORT=Number(process.env.PORT||4317),TOKEN=process.env.STATIONERY_PRINT_TOKEN;
 const SUMATRA=process.env.SUMATRA_PDF||'C:\\Program Files\\SumatraPDF\\SumatraPDF.exe';
+app.use((req,res,next)=>{res.setHeader('Access-Control-Allow-Private-Network','true');next();});
 app.use(cors({origin:['https://stationery-peaky7.vercel.app','http://localhost:5173'],allowedHeaders:['Content-Type','x-stationery-token'],methods:['GET','POST','OPTIONS']}));
 app.use(express.json({limit:'1mb'}));
 app.use((req,res,next)=>{if(!TOKEN||req.headers['x-stationery-token']!==TOKEN)return res.status(401).json({error:'Invalid print-agent token'});next();});
