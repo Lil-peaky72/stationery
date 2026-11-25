@@ -33,6 +33,8 @@ export default function App() {
   const [modal, setModal] = useState('');
   const [mobileMenu, setMobileMenu] = useState(false);
   const [orderType, setOrderType] = useState('Printing');
+  const [customerType, setCustomerType] = useState('Individual');
+  const [groupMemberCount, setGroupMemberCount] = useState(2);
   const [notice, setNotice] = useState('');
   const [savingOrder, setSavingOrder] = useState(false);
   const [lastOrderReference, setLastOrderReference] = useState('');
@@ -86,13 +88,19 @@ export default function App() {
       const { error: uploadError } = await supabase.storage.from('print-jobs').upload(filePath, documentFile, { contentType: 'application/pdf', upsert: false });
       if (uploadError) { setSavingOrder(false); setNotice('PDF upload failed. Please try again.'); window.setTimeout(() => setNotice(''), 4000); return; }
     }
+    const groupMembers = customerType === 'Group' ? Array.from({ length: groupMemberCount }, (_, index) => ({
+      full_name: String(fields.get(`member_name_${index}`) || '').trim(),
+      registration_number: String(fields.get(`member_registration_${index}`) || '').trim(),
+      phone: String(fields.get(`member_phone_${index}`) || '').trim()
+    })) : [];
+    const orderDetails = [String(fields.get('details') || '').trim(), customerType === 'Group' ? `GROUP ORDER (${groupMembers.length} MEMBERS)\n${groupMembers.map((m, i) => `${i + 1}. ${m.full_name} | ${m.registration_number} | ${m.phone}`).join('\n')}` : 'INDIVIDUAL ORDER'].filter(Boolean).join('\n\n');
     const { error } = await supabase.from('orders').insert({
       reference,
       customer_name: String(fields.get('customer_name') || '').trim(),
       registration_number: String(fields.get('registration_number') || '').trim() || null,
       phone: String(fields.get('phone') || '').trim(),
       order_type: orderType,
-      details: String(fields.get('details') || '').trim() || null,
+      details: orderDetails || null,
       items: orderType === 'Stationery purchase' ? cart : [],
       total_amount: orderType === 'Stationery purchase' ? cartTotal : 0,
       file_path: filePath,
@@ -134,7 +142,7 @@ export default function App() {
       <div className="announcement"><Sparkles size={14} /> Your campus essentials, made simple <span>·</span> Friendly student prices</div>
       <header className="header">
         <a className="brand" href="#home" onClick={(e) => { e.preventDefault(); scrollTo('home'); }}>
-          <span className="brand-mark"><img src="https://journals.udom.ac.tz/public/site/logo_udom.png" alt="University of Dodoma official logo" /></span>
+          <span className="brand-mark"><img src="https://journals.udom.ac.tz/public/site/logo_udom.png" alt="Official University of Dodoma logo" /></span>
           <span>stationery<span className="brand-dot">.</span><small>PRINT · BIND · SUPPLY</small></span>
         </a>
         <button className="mobile-toggle" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Toggle navigation">{mobileMenu ? <X /> : <Menu />}</button>
@@ -254,6 +262,12 @@ export default function App() {
           {modal === 'order' && <form className="order-form" onSubmit={submitOrder}>
             <p className="form-intro">Tell us what you need and attach your PDF. Your order and document will be sent securely to the shop.</p>
             <label>What do you need?<select value={orderType} onChange={(e) => setOrderType(e.target.value)}><option>Printing</option><option>Photocopying</option><option>Binding & finishing</option><option>Stationery purchase</option></select></label>
+            <label>Order type<select value={customerType} onChange={(e) => setCustomerType(e.target.value)}><option>Individual</option><option>Group</option></select></label>
+            {customerType === 'Group' && <>
+              <label>Number of group members<select value={groupMemberCount} onChange={(e) => setGroupMemberCount(Number(e.target.value))}>{Array.from({length: 30}, (_, i) => i + 2).map(n => <option key={n} value={n}>{n} members</option>)}</select></label>
+              <div className="group-members-heading"><b>Group member information</b><small>Enter each member's details below.</small></div>
+              {Array.from({length: groupMemberCount}, (_, index) => <fieldset className="group-member-card" key={index}><legend>Member {index + 1}</legend><label>Full name<input name={`member_name_${index}`} required placeholder="Member full name" /></label><label>Registration number<input name={`member_registration_${index}`} required placeholder="e.g. T24-..." /></label><label>Phone number<input name={`member_phone_${index}`} required type="tel" placeholder="+255 ..." /></label></fieldset>)}
+            </>}
             <label>Full name<input name="customer_name" required placeholder="Your name" /></label>
             <label>Student registration number <input name="registration_number" placeholder="e.g. T24-..." /></label>
             <label>Phone number <input name="phone" required type="tel" placeholder="+255 ..." /></label>
