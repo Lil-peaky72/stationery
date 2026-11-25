@@ -28,3 +28,11 @@ drop policy if exists "Admins can delete print PDFs" on storage.objects;
 create policy "Admins can delete print PDFs" on storage.objects for delete to authenticated using(bucket_id='print-jobs' and public.is_stationery_admin());
 -- After creating the admin user in Authentication > Users, run this separately:
 -- insert into public.stationery_admins(user_id) select id from auth.users where email='ADMIN_EMAIL_HERE' on conflict(user_id) do update set active=true;
+
+
+-- Allow anonymous student checkout to attach the PDF object path and file metadata.
+grant insert (reference, customer_name, registration_number, phone, order_type, details, items, total_amount, file_path, file_name, mime_type)
+on public.orders to anon, authenticated;
+-- Authenticated users still see/update orders only when the RLS admin policy above allows it.
+grant select, update (status, copies, paper_size, colour_mode)
+on public.orders to authenticated;
