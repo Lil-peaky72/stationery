@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
+import Admin from './Admin.jsx';
 import './styles.css';
 
 class AppErrorBoundary extends React.Component {
@@ -40,7 +41,7 @@ if (!rootElement) {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
       <AppErrorBoundary>
-        <App />
+        {window.location.pathname.startsWith('/admin') ? <Admin /> : <App />}
       </AppErrorBoundary>
     </React.StrictMode>
   );
