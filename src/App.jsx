@@ -134,7 +134,7 @@ export default function App() {
       <div className="announcement"><Sparkles size={14} /> Your campus essentials, made simple <span>·</span> Friendly student prices</div>
       <header className="header">
         <a className="brand" href="#home" onClick={(e) => { e.preventDefault(); scrollTo('home'); }}>
-          <span className="brand-mark"><Printer size={21} strokeWidth={2.2} /></span>
+          <span className="brand-mark"><img src="https://journals.udom.ac.tz/public/site/logo_udom.png" alt="University of Dodoma official logo" /></span>
           <span>stationery<span className="brand-dot">.</span><small>PRINT · BIND · SUPPLY</small></span>
         </a>
         <button className="mobile-toggle" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Toggle navigation">{mobileMenu ? <X /> : <Menu />}</button>
@@ -242,7 +242,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <div className="section-wrap footer-inner"><div className="brand footer-brand"><span className="brand-mark"><Printer size={21} /></span><span>stationery<span className="brand-dot">.</span><small>PRINT · BIND · SUPPLY</small></span></div><p>Helping students get their best work out into the world.</p><div className="footer-bottom"><span>© 2026 Stationery. Built for students.</span><button onClick={() => setModal('support')}>Need help? Contact support <ArrowRight size={14} /></button></div></div>
+        <div className="section-wrap footer-inner"><div className="brand footer-brand"><span className="brand-mark"><img src="https://journals.udom.ac.tz/public/site/logo_udom.png" alt="University of Dodoma official logo" /></span><span>stationery<span className="brand-dot">.</span><small>PRINT · BIND · SUPPLY</small></span></div><p>Helping students get their best work out into the world.</p><div className="footer-bottom"><span>© 2026 Stationery. Built for students.</span><button onClick={() => setModal('support')}>Need help? Contact support <ArrowRight size={14} /></button></div></div>
       </footer>
 
       {notice && <div className="toast"><Check size={16} />{notice}</div>}
