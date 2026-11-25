@@ -49,12 +49,12 @@ export default function DocumentStudio() {
           <h3><FileText size={17}/> Cover page details</h3>
           <p className="document-help">The cover layout is fixed. Only these information fields can be changed.</p>
           {[
-            ['course','Course name'],['instructor','Course instructor'],['code','Course code'],
+            ['programme','Programme name'],['course','Course name'],['instructor','Course instructor'],['code','Course code'],
             ['name','Student full name'],['registration','Registration number'],['gender','Gender'],['signature','Signature / initials']
           ].map(([key,label]) => <label className="document-field" key={key}>{label}<input value={details[key]} onChange={e => update(key,e.target.value)} placeholder={label}/></label>)}
           <label className="document-field">Nature of work<select value={details.nature} onChange={e => update('nature',e.target.value)}><option>INDIVIDUAL ASSIGNMENT</option><option>GROUP ASSIGNMENT</option><option>FIELD REPORT</option><option>RESEARCH REPORT</option><option>COURSEWORK</option></select></label>
           <label className="document-field">Course / programme short name<input value={details.courseShort} onChange={e => update('courseShort',e.target.value)}/></label>
-          <div className="document-tip">Your details update on the cover preview immediately. Institution branding and page layout remain fixed.</div>
+          <div className="document-tip">Your details update on the cover preview immediately. The programme name and student details are editable. The official UDOM emblem is included in the printed cover page.</div>
         </aside>
 
         <div className="document-preview-area">
@@ -71,7 +71,7 @@ export default function DocumentStudio() {
           <div className="a4-page cover-page">
             <div className="cover-inner">
               <h3>THE UNIVERSITY OF DODOMA</h3>
-              <div className="udom-emblem"><span>THE UNIVERSITY OF DODOMA</span><b>UDOM</b><small>Embracing Knowledge</small></div>
+              <img className="udom-cover-logo" src="https://journals.udom.ac.tz/public/site/logo_udom.png" alt="Official University of Dodoma emblem" />
               <h4>{details.college}</h4>
               <h4>{details.department}</h4>
               <p><strong>PROGRAMME NAME:</strong> {details.programme}.</p>
