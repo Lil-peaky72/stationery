@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import DocumentStudio from './DocumentStudio.jsx';
 import {
   ArrowRight, BookOpen, Check, ChevronDown, Clock3, FileText,
   Headphones, Menu, Minus, Plus, Printer, Search, ShieldCheck,
@@ -82,6 +83,7 @@ export default function App() {
         <nav className={mobileMenu ? 'nav-links nav-open' : 'nav-links'}>
           <button onClick={() => scrollTo('home')}>Home</button>
           <button onClick={() => scrollTo('services')}>Printing services</button>
+          <button onClick={() => scrollTo('document-studio')}>Document editor</button>
           <button onClick={() => scrollTo('shop')}>Stationery shop</button>
           <button onClick={() => setModal('track')}>Track order</button>
         </nav>
@@ -124,6 +126,8 @@ export default function App() {
           <div><Clock3 size={19} /><span>Convenient order tracking</span></div>
           <div><Headphones size={19} /><span>Friendly student support</span></div>
         </section>
+
+        <DocumentStudio />
 
         <section className="section-wrap services-section" id="services">
           <div className="section-heading">
