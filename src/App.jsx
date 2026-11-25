@@ -36,6 +36,9 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [savingOrder, setSavingOrder] = useState(false);
   const [lastOrderReference, setLastOrderReference] = useState('');
+  const [trackingReference, setTrackingReference] = useState('');
+  const [trackingResult, setTrackingResult] = useState(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
 
   const categories = ['All', 'Books', 'Writing', 'Organisation', 'Study tools'];
   const visibleProducts = useMemo(() => products.filter((product) => {
@@ -84,6 +87,19 @@ export default function App() {
     setLastOrderReference(reference);
     setCart([]);
     setModal('submitted');
+  }
+
+  async function trackOrder(event) {
+    event.preventDefault();
+    setTrackingLoading(true);
+    setTrackingResult(null);
+    const { data, error } = await supabase.rpc('track_stationery_order', {
+      order_reference: trackingReference.trim().toUpperCase()
+    });
+    setTrackingLoading(false);
+    setTrackingResult(error || !data?.length
+      ? { error: 'No order was found with that reference.' }
+      : data[0]);
   }
 
   function openOrder(type) {
@@ -229,7 +245,7 @@ export default function App() {
             <button className="button button-primary full-button" type="submit" disabled={savingOrder}>{savingOrder ? "Saving order..." : "Submit order"} <ArrowRight size={16} /></button>
           </form>}
           {modal === 'submitted' && <div className="success-state"><span><Check size={25} /></span><h3>Order received</h3><p>Your order has been saved. Keep this tracking reference:</p><strong>{lastOrderReference}</strong><button className="button button-primary" onClick={() => setModal('')}>Got it</button></div>}
-          {modal === 'track' && <form className="order-form" onSubmit={(e) => { e.preventDefault(); setNotice('Tracking will be available when order services are connected.'); setModal(''); window.setTimeout(() => setNotice(''), 3000); }}><p className="form-intro">Enter the reference given to you after your order is confirmed.</p><label>Order reference<input required placeholder="e.g. STN-000123" /></label><button className="button button-primary full-button">Check order status <ArrowRight size={16} /></button><p className="form-hint">Live tracking will be connected to the order database in a later phase.</p></form>}
+          {modal === 'track' && <form className="order-form" onSubmit={trackOrder}><p className="form-intro">Enter the reference given to you after your order is confirmed.</p><label>Order reference<input required value={trackingReference} onChange={e => setTrackingReference(e.target.value)} placeholder="e.g. STN-000123" /></label><button className="button button-primary full-button" disabled={trackingLoading}>{trackingLoading ? 'Checking...' : 'Check order status'} <ArrowRight size={16} /></button>{trackingResult && <div className="tracking-result">{trackingResult.error ? trackingResult.error : <>Status: <b>{trackingResult.status}</b><br/>Order type: {trackingResult.order_type}</>}</div>}</form>}
           {modal === 'support' && <div className="support-content"><p>Need help choosing a service or preparing a document? Contact details will be added once the business phone number and support channel are confirmed.</p><div className="support-placeholder"><Headphones size={22} /><span>Student-friendly support is part of the plan.</span></div></div>}
         </div>
       </div>}
