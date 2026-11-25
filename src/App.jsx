@@ -22,6 +22,10 @@ const services = [
   { icon: BookOpen, title: 'Binding & finishing', text: 'Neat spiral, comb and premium finishes for assignments and projects.' }
 ];
 
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
+const PAPER_SIZES = ['A4', 'A3', 'Letter', 'Legal'];
+const COLOUR_MODES = ['Black & white', 'Colour'];
+
 const money = (amount) => new Intl.NumberFormat('en-TZ', {
   style: 'currency', currency: 'TZS', maximumFractionDigits: 0
 }).format(amount);
@@ -67,26 +71,45 @@ export default function App() {
       .filter((item) => item.quantity > 0));
   }
 
+  function flash(message, duration = 4000) {
+    setNotice(message);
+    window.setTimeout(() => setNotice(''), duration);
+  }
+
   async function submitOrder(event) {
     event.preventDefault();
-    setSavingOrder(true);
     const fields = new FormData(event.currentTarget);
-    const reference = 'STN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+
+    // Hidden field that real customers never see; simple bots tend to fill it in.
+    if (fields.get('website')) return;
+
     const documentFile = fields.get('document_file');
-    let filePath = null;
-    if (orderType !== 'Stationery purchase') {
-      if (!documentFile || documentFile.size === 0 || documentFile.type !== 'application/pdf') {
-        setSavingOrder(false); setNotice('Please attach a PDF document.'); window.setTimeout(() => setNotice(''), 4000); return;
-      }
-      if (documentFile.size > 20 * 1024 * 1024) {
-        setSavingOrder(false); setNotice('PDF must be 20 MB or smaller.'); window.setTimeout(() => setNotice(''), 4000); return;
-      }
-      const safeName = documentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      filePath = reference + '/' + safeName;
-      const { error: uploadError } = await supabase.storage.from('print-jobs').upload(filePath, documentFile, { contentType: 'application/pdf', upsert: false });
-      if (uploadError) { setSavingOrder(false); setNotice('PDF upload failed. Please try again.'); window.setTimeout(() => setNotice(''), 4000); return; }
+    const hasFile = orderType !== 'Stationery purchase' && documentFile instanceof File && documentFile.size > 0;
+
+    if (orderType === 'Printing' && !hasFile) {
+      flash('Please attach the PDF you want printed.');
+      return;
     }
-    const { error } = await supabase.from('orders').insert({
+    if (hasFile) {
+      const looksLikePdf = documentFile.type === 'application/pdf' || documentFile.name.toLowerCase().endsWith('.pdf');
+      if (!looksLikePdf) { flash('Please attach a PDF document.'); return; }
+      if (documentFile.size > MAX_PDF_BYTES) { flash('PDF must be 20 MB or smaller.'); return; }
+    }
+
+    setSavingOrder(true);
+    const reference = 'STN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+
+    let filePath = null;
+    if (hasFile) {
+      const baseName = documentFile.name.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100) || 'document';
+      filePath = reference + '/' + baseName + '.pdf';
+      const { error: uploadError } = await supabase.storage
+        .from('print-jobs')
+        .upload(filePath, documentFile, { contentType: 'application/pdf', upsert: false });
+      if (uploadError) { setSavingOrder(false); flash('PDF upload failed. Please try again.'); return; }
+    }
+
+    const order = {
       reference,
       customer_name: String(fields.get('customer_name') || '').trim(),
       registration_number: String(fields.get('registration_number') || '').trim() || null,
@@ -94,13 +117,24 @@ export default function App() {
       order_type: orderType,
       details: String(fields.get('details') || '').trim() || null,
       items: orderType === 'Stationery purchase' ? cart : [],
-      total_amount: orderType === 'Stationery purchase' ? cartTotal : 0,
-      file_path: filePath,
-      file_name: filePath ? documentFile.name : null,
-      mime_type: filePath ? 'application/pdf' : null
-    });
+      total_amount: orderType === 'Stationery purchase' ? cartTotal : 0
+    };
+
+    if (hasFile) {
+      const copies = Math.min(20, Math.max(1, parseInt(fields.get('copies'), 10) || 1));
+      const paperSize = String(fields.get('paper_size') || 'A4');
+      const colourMode = String(fields.get('colour_mode') || 'Black & white');
+      order.file_path = filePath;
+      order.file_name = documentFile.name.slice(0, 200);
+      order.mime_type = 'application/pdf';
+      order.copies = copies;
+      order.paper_size = PAPER_SIZES.includes(paperSize) ? paperSize : 'A4';
+      order.colour_mode = COLOUR_MODES.includes(colourMode) ? colourMode : 'Black & white';
+    }
+
+    const { error } = await supabase.from('orders').insert(order);
     setSavingOrder(false);
-    if (error) { setNotice('Could not save your order. Please try again.'); window.setTimeout(() => setNotice(''), 4000); return; }
+    if (error) { flash('Could not save your order. Please try again.'); return; }
     setLastOrderReference(reference);
     setCart([]);
     setModal('submitted');
@@ -257,7 +291,17 @@ export default function App() {
             <label>Full name<input name="customer_name" required placeholder="Your name" /></label>
             <label>Student registration number <input name="registration_number" placeholder="e.g. T24-..." /></label>
             <label>Phone number <input name="phone" required type="tel" placeholder="+255 ..." /></label>
-            {orderType !== 'Stationery purchase' && <label>PDF document (maximum 20 MB) <input name="document_file" type="file" accept="application/pdf,.pdf" required /></label>}
+            {orderType !== 'Stationery purchase' && <>
+              <label>{orderType === 'Printing' ? 'PDF document (maximum 20 MB)' : 'PDF document (optional, maximum 20 MB)'} <input name="document_file" type="file" accept="application/pdf,.pdf" required={orderType === 'Printing'} /></label>
+              {orderType === 'Printing' && <div className="order-print-options">
+                <label>Copies<input name="copies" type="number" min="1" max="20" defaultValue="1" /></label>
+                <label>Paper size<select name="paper_size" defaultValue="A4">{PAPER_SIZES.map((size) => <option key={size}>{size}</option>)}</select></label>
+                <label>Colour<select name="colour_mode" defaultValue="Black & white">{COLOUR_MODES.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
+              </div>}
+            </>}
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}>
+              <label>Website <input name="website" tabIndex={-1} autoComplete="off" /></label>
+            </div>
             <label>Order details <textarea name="details" rows="3" placeholder="Number of pages, copies, colour or black & white, binding type..." /></label>
             <button className="button button-primary full-button" type="submit" disabled={savingOrder}>{savingOrder ? "Saving order..." : "Submit order"} <ArrowRight size={16} /></button>
           </form>}
