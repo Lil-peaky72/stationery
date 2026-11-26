@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from './lib/supabase.js';
+import AdminAnalytics from './AdminAnalytics.jsx';
+import { formatTZS } from './lib/pricing.js';
 import './admin.css';
 
 const AGENT_URL = 'http://127.0.0.1:4317';
@@ -11,9 +13,7 @@ const formatDate = (value) => new Date(value).toLocaleString('en-GB', {
   timeZone: 'Africa/Dar_es_Salaam', dateStyle: 'medium', timeStyle: 'short'
 });
 
-const money = (amount) => new Intl.NumberFormat('en-TZ', {
-  style: 'currency', currency: 'TZS', maximumFractionDigits: 0
-}).format(amount || 0);
+const money = formatTZS;
 
 function itemsSummary(items) {
   if (!Array.isArray(items) || items.length === 0) return '';
@@ -41,6 +41,7 @@ export default function Admin() {
 
   const [orders, setOrders] = useState([]);
   const [selected, setSelected] = useState([]);
+  const [tab, setTab] = useState('orders');
   const [filter, setFilter] = useState('Pending');
   const [query, setQuery] = useState('');
 
@@ -286,9 +287,17 @@ export default function Admin() {
             <h1>Orders and printing</h1>
             <p>Review every order, update its status, and send student PDFs to a printer connected to this Windows computer.</p>
           </div>
-          <button className="admin-quiet" onClick={loadOrders}>Refresh queue ↻</button>
+          {tab === 'orders' && <button className="admin-quiet" onClick={loadOrders}>Refresh queue ↻</button>}
         </div>
 
+        <nav className="admin-tabs" aria-label="Admin sections">
+          <button type="button" className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>Orders &amp; printing</button>
+          <button type="button" className={tab === 'analytics' ? 'active' : ''} onClick={() => setTab('analytics')}>Sales analytics</button>
+        </nav>
+
+        {tab === 'analytics' && <AdminAnalytics notify={notify} />}
+
+        {tab === 'orders' && <>
         <div className="admin-stats">
           <div><small>Pending PDF jobs</small><strong>{pending.length}</strong></div>
           <div><small>All orders</small><strong>{orders.length}</strong></div>
@@ -368,7 +377,9 @@ export default function Admin() {
                       {order.registration_number && <small>{order.registration_number}</small>}
                     </td>
                     <td className="admin-details">
-                      {order.file_path && <small>{order.copies} × {order.paper_size} · {order.colour_mode}</small>}
+                      {order.pages > 0 && <small>{order.pages} {order.pages === 1 ? 'page' : 'pages'} × {order.copies} {order.copies === 1 ? 'copy' : 'copies'}{order.order_type === 'Printing' ? ' · ' + order.colour_mode : ''}{order.add_binding ? ' · + binding' : ''}</small>}
+                      {order.order_type === 'Binding & finishing' && <small>{order.copies} {order.copies === 1 ? 'document' : 'documents'} to bind</small>}
+                      {order.file_path && order.pages == null && <small>{order.copies} × {order.paper_size} · {order.colour_mode}</small>}
                       {itemsSummary(order.items) && <small>{itemsSummary(order.items)}</small>}
                       {order.total_amount > 0 && <small>Total {money(order.total_amount)}</small>}
                       {order.details && <small className="admin-note">{order.details}</small>}
@@ -405,6 +416,7 @@ export default function Admin() {
           </div>
           <p className="admin-help">Print all sends pending PDF orders one at a time. Failed jobs can be retried, and a job is claimed before printing so it cannot be sent twice.</p>
         </section>
+        </>}
       </section>
       {message && <div className="admin-toast">{message}</div>}
     </main>

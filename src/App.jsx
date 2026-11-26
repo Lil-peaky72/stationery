@@ -1,10 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from './lib/supabase.js';
 import DocumentStudio from './DocumentStudio.jsx';
+import { DEFAULT_PRICES, MAX_COPIES, MAX_PAGES, PAGE_BASED_TYPES, clampInt, formatTZS, mergePrices, priceOrder } from './lib/pricing.js';
+import { countPdfPages } from './lib/pdfPages.js';
 import {
   ArrowRight, BookOpen, Check, ChevronDown, Clock3, FileText,
   Headphones, Menu, Minus, Plus, Printer, Search, ShieldCheck,
-  ShoppingBag, ShoppingCart, Sparkles, UploadCloud, X
+  ShoppingBag, ShoppingCart, Sparkles, UploadCloud, X, ClipboardList
 } from 'lucide-react';
 
 const products = [
@@ -17,18 +19,25 @@ const products = [
 ];
 
 const services = [
-  { icon: Printer, title: 'Document printing', text: 'Clear black & white or colour prints for notes, reports and coursework.' },
-  { icon: FileText, title: 'Photocopying', text: 'Sharp, reliable copies for class materials and important documents.' },
-  { icon: BookOpen, title: 'Binding & finishing', text: 'Neat spiral, comb and premium finishes for assignments and projects.' }
+  { icon: Printer, title: 'Document printing', type: 'Printing', text: 'Clear black & white or colour prints for notes, reports and coursework.' },
+  { icon: FileText, title: 'Photocopying', type: 'Photocopying', text: 'Sharp, reliable copies for class materials and important documents.' },
+  { icon: ClipboardList, title: 'University forms', type: 'University form', text: 'Registration, clearance and other university forms printed neatly and ready to submit.' },
+  { icon: BookOpen, title: 'Binding & finishing', type: 'Binding & finishing', text: 'Neat spiral, comb and premium finishes for assignments and projects.' }
 ];
+
+function serviceRate(type, prices) {
+  if (type === 'Printing') return `${formatTZS(prices.print_bw)} black & white · ${formatTZS(prices.print_colour)} colour, per page`;
+  if (type === 'Photocopying') return `${formatTZS(prices.copy)} per page`;
+  if (type === 'University form') return `${formatTZS(prices.form_page)} per page`;
+  if (type === 'Binding & finishing') return `${formatTZS(prices.binding)} per document`;
+  return '';
+}
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const PAPER_SIZES = ['A4', 'A3', 'Letter', 'Legal'];
 const COLOUR_MODES = ['Black & white', 'Colour'];
 
-const money = (amount) => new Intl.NumberFormat('en-TZ', {
-  style: 'currency', currency: 'TZS', maximumFractionDigits: 0
-}).format(amount);
+const money = formatTZS;
 
 export default function App() {
   const [activeCategory, setActiveCategory] = useState('All');
@@ -38,6 +47,14 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [orderType, setOrderType] = useState('Printing');
   const [customerType, setCustomerType] = useState('Individual');
+  const [prices, setPrices] = useState(DEFAULT_PRICES);
+  const [pages, setPages] = useState('');
+  const [pagesNote, setPagesNote] = useState('');
+  const [countingPages, setCountingPages] = useState(false);
+  const [copies, setCopies] = useState(1);
+  const [colourMode, setColourMode] = useState('Black & white');
+  const [paperSize, setPaperSize] = useState('A4');
+  const [addBinding, setAddBinding] = useState(false);
   const [groupMemberCount, setGroupMemberCount] = useState(2);
   const [notice, setNotice] = useState('');
   const [savingOrder, setSavingOrder] = useState(false);
@@ -54,6 +71,32 @@ export default function App() {
   }), [activeCategory, search]);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  // Live prices come from the shop's price list; the built-in prices are used if it cannot be reached.
+  useEffect(() => {
+    let cancelled = false;
+    supabase.from('price_list').select('key, price').then(({ data, error }) => {
+      if (!cancelled && !error && data?.length) setPrices(mergePrices(data));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const quote = priceOrder({ orderType, pages, copies, colourMode, addBinding }, prices);
+
+  async function onDocumentChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) { setPagesNote(''); return; }
+    setCountingPages(true);
+    setPagesNote('Counting pages…');
+    const count = await countPdfPages(file);
+    setCountingPages(false);
+    if (count) {
+      setPages(String(Math.min(count, MAX_PAGES)));
+      setPagesNote(count > MAX_PAGES ? `This PDF has ${count} pages. Please contact the shop for very large jobs.` : `${count} ${count === 1 ? 'page' : 'pages'} found in your PDF. You can change this if needed.`);
+    } else {
+      setPagesNote('We could not count the pages automatically. Please type the number of pages.');
+    }
+  }
+
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   function addToCart(product) {
@@ -90,6 +133,10 @@ export default function App() {
 
     if (orderType === 'Printing' && !hasFile) {
       flash('Please attach the PDF you want printed.');
+      return;
+    }
+    if (orderType !== 'Stationery purchase' && !quote.ready) {
+      flash('Please enter the number of pages so we can work out your cost.');
       return;
     }
     if (hasFile) {
@@ -131,26 +178,30 @@ export default function App() {
       order_type: orderType,
       details: orderDetails || null,
       items: orderType === 'Stationery purchase' ? cart : [],
-      total_amount: orderType === 'Stationery purchase' ? cartTotal : 0
+      total_amount: orderType === 'Stationery purchase' ? cartTotal : quote.total
     };
 
+    if (orderType !== 'Stationery purchase') {
+      order.copies = clampInt(copies, 1, MAX_COPIES, 1);
+      if (PAGE_BASED_TYPES.includes(orderType)) {
+        order.pages = clampInt(pages, 1, MAX_PAGES, 1);
+        order.add_binding = addBinding;
+      }
+      if (orderType === 'Printing' || orderType === 'University form') order.paper_size = PAPER_SIZES.includes(paperSize) ? paperSize : 'A4';
+      if (orderType === 'Printing') order.colour_mode = COLOUR_MODES.includes(colourMode) ? colourMode : 'Black & white';
+    }
     if (hasFile) {
-      const copies = Math.min(20, Math.max(1, parseInt(fields.get('copies'), 10) || 1));
-      const paperSize = String(fields.get('paper_size') || 'A4');
-      const colourMode = String(fields.get('colour_mode') || 'Black & white');
       order.file_path = filePath;
       order.file_name = documentFile.name.slice(0, 200);
       order.mime_type = 'application/pdf';
-      order.copies = copies;
-      order.paper_size = PAPER_SIZES.includes(paperSize) ? paperSize : 'A4';
-      order.colour_mode = COLOUR_MODES.includes(colourMode) ? colourMode : 'Black & white';
     }
 
     let { error } = await supabase.from('orders').insert(order);
-    if (error?.code === '42501' && order.copies !== undefined) {
-      // The database has not been updated to accept print options yet (supabase/printing-hardening.sql).
-      // Save the order without them rather than losing it; staff can still set them in the admin page.
-      const { copies, paper_size, colour_mode, ...basicOrder } = order;
+    if (error && ['42501', 'PGRST204', '42703'].includes(error.code) && order.copies !== undefined) {
+      // The database has not been updated for print options or page counts yet
+      // (supabase/printing-hardening.sql and supabase/pricing-and-analytics.sql).
+      // Save the order without them rather than losing it.
+      const { copies: _c, paper_size: _p, colour_mode: _m, pages: _g, add_binding: _b, ...basicOrder } = order;
       ({ error } = await supabase.from('orders').insert(basicOrder));
     }
     setSavingOrder(false);
@@ -175,6 +226,12 @@ export default function App() {
 
   function openOrder(type) {
     setOrderType(type);
+    setPages('');
+    setPagesNote('');
+    setCopies(1);
+    setColourMode('Black & white');
+    setPaperSize('A4');
+    setAddBinding(false);
     setModal('order');
   }
 
@@ -247,12 +304,13 @@ export default function App() {
             <p>All the essentials for your academic journey, brought together in one simple place.</p>
           </div>
           <div className="service-grid">
-            {services.map(({ icon: Icon, title, text }, index) => (
+            {services.map(({ icon: Icon, title, type, text }, index) => (
               <article className="service-card" key={title}>
                 <div className="service-icon">{<Icon size={23} />}</div>
                 <span className="service-number">0{index + 1}</span>
                 <h3>{title}</h3><p>{text}</p>
-                <button className="text-link" onClick={() => openOrder(title)}>Request service <ArrowRight size={15} /></button>
+                <p className="service-rate">{serviceRate(type, prices)}</p>
+                <button className="text-link" onClick={() => openOrder(type)}>Request service <ArrowRight size={15} /></button>
               </article>
             ))}
           </div>
@@ -307,7 +365,7 @@ export default function App() {
           {modal === 'cart' && <div className="cart-content">{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={32} /><h3>Your bag is waiting</h3><p>Add stationery essentials from the shop to see them here.</p><button className="button button-primary" onClick={() => { setModal(''); scrollTo('shop'); }}>Browse the shop</button></div> : <><div className="cart-items">{cart.map((item) => <div className="cart-row" key={item.id}><span className="cart-emoji">{item.icon}</span><div className="cart-item-name"><b>{item.name}</b><small>{money(item.price)} each</small></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)}><Minus size={13} /></button><span>{item.quantity}</span><button onClick={() => changeQuantity(item.id, 1)}><Plus size={13} /></button></div><b>{money(item.price * item.quantity)}</b></div>)}</div><div className="cart-total"><span>Estimated total</span><b>{money(cartTotal)}</b></div><p className="form-hint">Checkout and payment will be connected in a later development phase.</p><button className="button button-primary full-button" onClick={() => { setModal('order'); setOrderType('Stationery purchase'); }}>Continue with request <ArrowRight size={16} /></button></>}</div>}
           {modal === 'order' && <form className="order-form" onSubmit={submitOrder}>
             <p className="form-intro">Tell us what you need and attach your PDF. Your order and document will be sent securely to the shop.</p>
-            <label>What do you need?<select value={orderType} onChange={(e) => setOrderType(e.target.value)}><option>Printing</option><option>Photocopying</option><option>Binding & finishing</option><option>Stationery purchase</option></select></label>
+            <label>What do you need?<select value={orderType} onChange={(e) => setOrderType(e.target.value)}><option>Printing</option><option>Photocopying</option><option>University form</option><option>Binding & finishing</option><option>Stationery purchase</option></select></label>
             <label>Order type<select value={customerType} onChange={(e) => setCustomerType(e.target.value)}><option>Individual</option><option>Group</option></select></label>
             {customerType === 'Group' && <>
               <label>Number of group members<select value={groupMemberCount} onChange={(e) => setGroupMemberCount(Number(e.target.value))}>{Array.from({length: 30}, (_, i) => i + 2).map(n => <option key={n} value={n}>{n} members</option>)}</select></label>
@@ -318,17 +376,30 @@ export default function App() {
             <label>Student registration number <input name="registration_number" placeholder="e.g. T24-..." /></label>
             <label>Phone number <input name="phone" required type="tel" placeholder="+255 ..." /></label>
             {orderType !== 'Stationery purchase' && <>
-              <label>{orderType === 'Printing' ? 'PDF document (maximum 20 MB)' : 'PDF document (optional, maximum 20 MB)'} <input name="document_file" type="file" accept="application/pdf,.pdf" required={orderType === 'Printing'} /></label>
-              {orderType === 'Printing' && <div className="order-print-options">
-                <label>Copies<input name="copies" type="number" min="1" max="20" defaultValue="1" /></label>
-                <label>Paper size<select name="paper_size" defaultValue="A4">{PAPER_SIZES.map((size) => <option key={size}>{size}</option>)}</select></label>
-                <label>Colour<select name="colour_mode" defaultValue="Black & white">{COLOUR_MODES.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
-              </div>}
+              {orderType !== 'Binding & finishing' && <label>{orderType === 'Printing' ? 'PDF document (maximum 20 MB)' : 'PDF document (optional, maximum 20 MB)'} <input name="document_file" type="file" accept="application/pdf,.pdf" required={orderType === 'Printing'} onChange={onDocumentChange} /></label>}
+              {PAGE_BASED_TYPES.includes(orderType) && <label>Number of pages <input name="pages" type="number" inputMode="numeric" min="1" max={MAX_PAGES} required value={pages} onChange={(e) => { setPages(e.target.value); setPagesNote(''); }} placeholder="Filled in automatically from your PDF" />
+                {pagesNote && <small className="field-note">{pagesNote}</small>}</label>}
+              <div className="order-print-options">
+                <label>{orderType === 'Binding & finishing' ? 'Documents to bind' : 'Copies'}<input name="copies" type="number" inputMode="numeric" min="1" max={MAX_COPIES} value={copies} onChange={(e) => setCopies(e.target.value)} /></label>
+                {(orderType === 'Printing' || orderType === 'University form') && <label>Paper size<select name="paper_size" value={paperSize} onChange={(e) => setPaperSize(e.target.value)}>{PAPER_SIZES.map((size) => <option key={size}>{size}</option>)}</select></label>}
+                {orderType === 'Printing' && <label>Colour<select name="colour_mode" value={colourMode} onChange={(e) => setColourMode(e.target.value)}>{COLOUR_MODES.map((mode) => <option key={mode}>{mode}</option>)}</select></label>}
+              </div>
+              {PAGE_BASED_TYPES.includes(orderType) && <label className="check-row"><input type="checkbox" checked={addBinding} onChange={(e) => setAddBinding(e.target.checked)} /> Add binding ({formatTZS(prices.binding)} per document)</label>}
+              <div className="price-estimate" aria-live="polite">
+                <b className="price-estimate-title">Your cost</b>
+                {quote.ready
+                  ? <>
+                      {quote.lines.map((line) => <div className="price-line" key={line.label}><span>{line.label}</span><b>{formatTZS(line.amount)}</b></div>)}
+                      <div className="price-total"><span>Total</span><strong>{formatTZS(quote.total)}</strong></div>
+                    </>
+                  : <p className="price-wait">{countingPages ? 'Counting the pages in your PDF…' : 'Attach your PDF or enter the number of pages to see your cost.'}</p>}
+                <small>Rates: black & white {formatTZS(prices.print_bw)} · colour {formatTZS(prices.print_colour)} · photocopy {formatTZS(prices.copy)} · university form {formatTZS(prices.form_page)} (each per page) · binding {formatTZS(prices.binding)} per document. The shop confirms the final amount when it checks your document.</small>
+              </div>
             </>}
             <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}>
               <label>Website <input name="website" tabIndex={-1} autoComplete="off" /></label>
             </div>
-            <label>Order details <textarea name="details" rows="3" placeholder="Number of pages, copies, colour or black & white, binding type..." /></label>
+            <label>Anything else we should know? <textarea name="details" rows="3" placeholder="Optional: binding style, stapling, deadline…" /></label>
             <button className="button button-primary full-button" type="submit" disabled={savingOrder}>{savingOrder ? "Saving order..." : "Submit order"} <ArrowRight size={16} /></button>
           </form>}
           {modal === 'submitted' && <div className="success-state"><span><Check size={25} /></span><h3>Order received</h3><p>Your order has been saved. Keep this tracking reference:</p><strong>{lastOrderReference}</strong><button className="button button-primary" onClick={() => setModal('')}>Got it</button></div>}

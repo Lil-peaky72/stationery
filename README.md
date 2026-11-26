@@ -5,7 +5,8 @@ A student-focused printing and stationery storefront.
 ## What it does
 
 - Storefront with printing, photocopying and binding services, a stationery catalogue and a shopping bag
-- Order form that saves orders to Supabase. Printing orders include a PDF upload plus copies, paper size and colour
+- Order form that saves orders to Supabase, with a live cost estimate. The page count is read from the uploaded PDF
+- Admin page, Sales analytics tab: sales per day or month, by service and by status, for any date range, plus an Excel (.xlsx) download of the same data
 - Order tracking by reference number
 - Student Document Studio (fixed UDOM cover page and A4 editor)
 - Admin page at `/admin`: sign in, see every order, change its status, view uploaded PDFs and send them to a printer through the Windows print agent
@@ -39,6 +40,7 @@ Run these files in the Supabase SQL editor, in this order:
 1. `supabase/stationery-orders.sql` — orders table, public order submission, safe public tracking
 2. `supabase/printing-system.sql` — admin allowlist, PDF storage bucket, print columns and admin policies
 3. `supabase/printing-hardening.sql` — stricter checks on statuses, file paths and print options, and tighter permissions
+4. `supabase/pricing-and-analytics.sql` — price list, page counts, and server-side totals
 
 Then create the first admin:
 
@@ -49,6 +51,24 @@ Then create the first admin:
 
 Run the files in the same order whenever you set up a new Supabase project.
 
+## Prices
+
+| Service | Price |
+|---|---|
+| Printing, black & white | TZS 100 per page |
+| Printing, colour | TZS 200 per page |
+| Photocopying | TZS 100 per page |
+| University forms | TZS 200 per page |
+| Binding | TZS 500 per document |
+
+Cost = pages × copies × the page price, plus TZS 500 for each document when binding is added. For a binding-only order, the number of documents is the "copies" value.
+
+The prices are stored in the `price_list` table and the database recalculates every order's total when it is saved, so customers cannot change what they are charged. To change a price, edit it in Supabase (Table Editor > `price_list`), or run for example `update public.price_list set price = 150 where key = 'print_bw';`. The website shows the new price straight away. Stationery purchases keep the total from the shopping bag.
+
+## Sales analytics and Excel
+
+Open `/admin` and choose the Sales analytics tab. Pick a quick period or any From and To dates (Dar es Salaam time). "Sales" count every order except Cancelled and Failed, including orders still pending. Download Excel gives a workbook with four sheets: Summary, Orders (one row per order with filters, ready for pivot tables), Daily (or Monthly for long periods) and the service breakdown inside Summary.
+
 ## Printing from the admin page
 
 See `windows-print-agent/README.md` for the one-time setup on the shop's Windows computer.
@@ -56,7 +76,7 @@ See `windows-print-agent/README.md` for the one-time setup on the shop's Windows
 ## Roadmap
 
 1. Confirm real products, prices, support details and collection/delivery options
-2. Calculate order totals on the server from a products table
+2. Calculate stationery purchase totals on the server from a products table
 3. Add rate limiting or a captcha for public order submission
 4. Product, stock and sales management in the admin page
 5. Integrate an appropriate Tanzanian payment provider after business requirements are confirmed
@@ -71,13 +91,20 @@ stationery/
 ├── src/
 │   ├── App.jsx              storefront, order form, tracking
 │   ├── Admin.jsx            admin orders and printing (/admin)
+│   ├── AdminAnalytics.jsx   sales analytics tab
 │   ├── DocumentStudio.jsx   student document workspace
-│   ├── lib/supabase.js      Supabase client
+│   ├── lib/
+│   │   ├── supabase.js      Supabase client
+│   │   ├── pricing.js       price rules and cost breakdown
+│   │   ├── pdfPages.js      counts pages in a PDF
+│   │   ├── analytics.js     date ranges and sales summaries
+│   │   └── exportExcel.js   builds the .xlsx report
 │   └── main.jsx
 ├── supabase/
 │   ├── stationery-orders.sql
 │   ├── printing-system.sql
 │   ├── printing-hardening.sql
+│   ├── pricing-and-analytics.sql
 │   └── seed-admin.sql
 └── windows-print-agent/     local service that sends PDFs to Windows printers
 ```
