@@ -21,12 +21,16 @@ const DEFAULT_BODY = 'Type your assignment here.\n\nUse the simple formatting co
 
 export default function DocumentStudio() {
   const [details, setDetails] = useState(initial);
+  const [groupStudents, setGroupStudents] = useState([{ name: '', registration: '', course: 'BCOM FIN', gender: '', signature: '' }, { name: '', registration: '', course: 'BCOM FIN', gender: '', signature: '' }]);
   const [title, setTitle] = useState('ASSIGNMENT TITLE');
   const [body, setBody] = useState(DEFAULT_BODY);
   const [format, setFormat] = useState('normal');
 
   const update = (key, value) => setDetails(current => ({ ...current, [key]: value }));
-  const reset = () => { setDetails(initial); setTitle('ASSIGNMENT TITLE'); setBody(DEFAULT_BODY); };
+  const updateStudent = (index, key, value) => setGroupStudents(current => current.map((student, i) => i === index ? { ...student, [key]: value } : student));
+  const changeNature = value => { update('nature', value); if (value === 'GROUP ASSIGNMENT' && groupStudents.length < 2) setGroupStudents([{ name: '', registration: '', course: details.courseShort, gender: '', signature: '' }, { name: '', registration: '', course: details.courseShort, gender: '', signature: '' }]); };
+  const changeStudentCount = value => { const count = Math.max(2, Math.min(50, Number(value) || 2)); setGroupStudents(current => Array.from({ length: count }, (_, i) => current[i] || { name: '', registration: '', course: details.courseShort, gender: '', signature: '' })); };
+  const reset = () => { setDetails(initial); setGroupStudents([{ name: '', registration: '', course: 'BCOM FIN', gender: '', signature: '' }, { name: '', registration: '', course: 'BCOM FIN', gender: '', signature: '' }]); setTitle('ASSIGNMENT TITLE'); setBody(DEFAULT_BODY); };
 
   function applyFormat(command, value) {
     document.execCommand(command, false, value || null);
@@ -51,12 +55,21 @@ export default function DocumentStudio() {
           <h3><FileText size={17}/> Cover page details</h3>
           <p className="document-help">The cover layout is fixed. Only these information fields can be changed.</p>
           {[
-            ['course','Course name'],['instructor','Course instructor'],['code','Course code'],
-            ['name','Student full name'],['registration','Registration number'],['gender','Gender'],['signature','Signature / initials']
+            ['programme','Programme name'],['course','Course name'],['instructor','Course instructor'],['code','Course code']
           ].map(([key,label]) => <label className="document-field" key={key}>{label}<input value={details[key]} onChange={e => update(key,e.target.value)} placeholder={label}/></label>)}
-          <label className="document-field">Nature of work<select value={details.nature} onChange={e => update('nature',e.target.value)}><option>INDIVIDUAL ASSIGNMENT</option><option>GROUP ASSIGNMENT</option><option>FIELD REPORT</option><option>RESEARCH REPORT</option><option>COURSEWORK</option></select></label>
-          <label className="document-field">Course / programme short name<input value={details.courseShort} onChange={e => update('courseShort',e.target.value)}/></label>
-          <div className="document-tip">Your details update on the cover preview immediately. Institution branding and page layout remain fixed.</div>
+          <label className="document-field">Nature of work<select value={details.nature} onChange={e => changeNature(e.target.value)}><option>INDIVIDUAL ASSIGNMENT</option><option>GROUP ASSIGNMENT</option><option>FIELD REPORT</option><option>RESEARCH REPORT</option><option>COURSEWORK</option></select></label>
+          {details.nature === 'GROUP ASSIGNMENT' ? <>
+            <label className="document-field">Number of group members<input type="number" min="2" max="50" value={groupStudents.length} onChange={e => changeStudentCount(e.target.value)}/></label>
+            <p className="document-help">Increase the number to add more students. Each member gets a row on the cover page.</p>
+            {groupStudents.map((student,index) => <div className="group-student-editor" key={index}>
+              <strong>Student {index + 1}</strong>
+              { [['name','Full name'],['registration','Registration number'],['course','Course short name'],['gender','Gender'],['signature','Signature / initials']].map(([key,label]) => <label className="document-field" key={key}>{label}<input value={student[key]} onChange={e => updateStudent(index,key,e.target.value)} placeholder={label}/></label>)}
+            </div>)}
+          </> : <>
+            { [['name','Student full name'],['registration','Registration number'],['gender','Gender'],['signature','Signature / initials']].map(([key,label]) => <label className="document-field" key={key}>{label}<input value={details[key]} onChange={e => update(key,e.target.value)} placeholder={label}/></label>)}
+            <label className="document-field">Course / programme short name<input value={details.courseShort} onChange={e => update('courseShort',e.target.value)}/></label>
+          </>}
+          <div className="document-tip">Your details update on the cover preview immediately. The programme name and student details are editable. The official UDOM emblem is included in the printed cover page.</div>
         </aside>
 
         <div className="document-preview-area">
@@ -73,7 +86,7 @@ export default function DocumentStudio() {
           <div className="a4-page cover-page">
             <div className="cover-inner">
               <h3>THE UNIVERSITY OF DODOMA</h3>
-              <div className="udom-emblem"><span>THE UNIVERSITY OF DODOMA</span><b>UDOM</b><small>Embracing Knowledge</small></div>
+              <img className="udom-cover-logo" src="https://journals.udom.ac.tz/public/site/logo_udom.png" alt="Official University of Dodoma emblem" />
               <h4>{details.college}</h4>
               <h4>{details.department}</h4>
               <p><strong>PROGRAMME NAME:</strong> {details.programme}.</p>
@@ -83,7 +96,7 @@ export default function DocumentStudio() {
               <p><strong>NATURE OF WORK:</strong> {details.nature}</p>
               <table className="cover-student-table">
                 <thead><tr><th>NO</th><th>NAME</th><th>REGISTRATION NO</th><th>COURSE</th><th>G</th><th>SIGN</th></tr></thead>
-                <tbody><tr><td>1</td><td>{details.name || ' '}</td><td>{details.registration || ' '}</td><td>{details.courseShort}</td><td>{details.gender}</td><td>{details.signature}</td></tr></tbody>
+                <tbody>{(details.nature === 'GROUP ASSIGNMENT' ? groupStudents : [{ name: details.name, registration: details.registration, course: details.courseShort, gender: details.gender, signature: details.signature }]).map((student,index) => <tr key={index}><td>{index + 1}</td><td>{student.name || ' '}</td><td>{student.registration || ' '}</td><td>{student.course || ' '}</td><td>{student.gender || ' '}</td><td>{student.signature || ' '}</td></tr>)}</tbody>
               </table>
             </div>
           </div>

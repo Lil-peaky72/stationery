@@ -236,7 +236,7 @@ export default function Admin() {
     return (
       <main className="admin-login">
         <form onSubmit={signIn}>
-          <div className="admin-mark">S.</div>
+          <div className="admin-mark"><img src="https://journals.udom.ac.tz/public/site/logo_udom.png" alt="University of Dodoma official logo" /></div>
           <p className="admin-kicker">STATIONERY / SECURE AREA</p>
           <h1>Admin sign in</h1>
           <p>Sign in with the administrator account created in Supabase.</p>
@@ -258,7 +258,7 @@ export default function Admin() {
     return (
       <main className="admin-login">
         <form onSubmit={(e) => { e.preventDefault(); signOut(); }}>
-          <div className="admin-mark">S.</div>
+          <div className="admin-mark"><img src="https://journals.udom.ac.tz/public/site/logo_udom.png" alt="University of Dodoma official logo" /></div>
           <h1>No access</h1>
           <p>{session.user.email} is not set up as a Stationery administrator.</p>
           <button className="admin-primary">Sign out</button>
@@ -272,7 +272,7 @@ export default function Admin() {
   return (
     <main className="admin-page">
       <header className="admin-top">
-        <a href="/" className="admin-brand">S. <span>Stationery Admin</span></a>
+        <a href="/" className="admin-brand"><img src="https://journals.udom.ac.tz/public/site/logo_udom.png" alt="University of Dodoma official logo" /><span>Stationery Admin</span></a>
         <div>
           <span className="admin-user">{session.user.email}</span>
           <button className="admin-quiet" onClick={signOut}>Sign out</button>
