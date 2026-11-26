@@ -6,12 +6,12 @@ A student-focused printing and stationery storefront.
 
 - Storefront with printing, photocopying and binding services, a stationery catalogue and a shopping bag
 - Order form that saves orders to Supabase, with a live cost estimate. The page count is read from the uploaded PDF
-- Admin page, Sales analytics tab: sales per day or month, by service and by status, for any date range, plus an Excel (.xlsx) download of the same data
 - Order tracking by reference number
 - Student Document Studio (fixed UDOM cover page and A4 editor)
 - Admin page at `/admin`: sign in, see every order, change its status, view uploaded PDFs and send them to a printer through the Windows print agent
+- Sales analytics in the admin page: sales per day or month, by service and by status, for any date range, plus an Excel (.xlsx) download of the same data
 
-Not built yet: payments, stock management and server-side price calculation. The catalogue and prices are sample data, and the order total is currently calculated in the browser.
+Not built yet: payments and stock management. The stationery catalogue and its prices are sample data, and a stationery purchase total still comes from the shopping bag in the browser. Printing, photocopying, university form and binding totals are calculated by the database.
 
 ## Tech stack
 
