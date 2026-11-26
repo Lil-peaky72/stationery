@@ -3,7 +3,7 @@ import { Download, FileText, Printer, RotateCcw } from 'lucide-react';
 import './document-studio.css';
 
 const initial = {
-  college: 'COLLEGE OF BUSINESS AND EDUCATION',
+  college: 'COLLEGE OF BUSINESS AND ECONOMICS',
   department: 'DEPARTMENT OF ACCOUNTING AND FINANCE.',
   programme: 'BACHELOR OF COMMERCE IN FINANCE',
   course: '',
@@ -17,18 +17,20 @@ const initial = {
   signature: ''
 };
 
+const DEFAULT_BODY = 'Type your assignment here.\n\nUse the simple formatting controls above to organise your work. Your text will appear on the A4 page preview.';
+
 export default function DocumentStudio() {
   const [details, setDetails] = useState(initial);
   const [groupStudents, setGroupStudents] = useState([{ name: '', registration: '', course: 'BCOM FIN', gender: '', signature: '' }, { name: '', registration: '', course: 'BCOM FIN', gender: '', signature: '' }]);
   const [title, setTitle] = useState('ASSIGNMENT TITLE');
-  const [body, setBody] = useState('Type your assignment here.\\n\\nUse the simple formatting controls above to organise your work. Your text will appear on the A4 page preview.');
+  const [body, setBody] = useState(DEFAULT_BODY);
   const [format, setFormat] = useState('normal');
 
   const update = (key, value) => setDetails(current => ({ ...current, [key]: value }));
   const updateStudent = (index, key, value) => setGroupStudents(current => current.map((student, i) => i === index ? { ...student, [key]: value } : student));
   const changeNature = value => { update('nature', value); if (value === 'GROUP ASSIGNMENT' && groupStudents.length < 2) setGroupStudents([{ name: '', registration: '', course: details.courseShort, gender: '', signature: '' }, { name: '', registration: '', course: details.courseShort, gender: '', signature: '' }]); };
   const changeStudentCount = value => { const count = Math.max(2, Math.min(50, Number(value) || 2)); setGroupStudents(current => Array.from({ length: count }, (_, i) => current[i] || { name: '', registration: '', course: details.courseShort, gender: '', signature: '' })); };
-  const reset = () => { setDetails(initial); setGroupStudents([{ name: '', registration: '', course: 'BCOM FIN', gender: '', signature: '' }, { name: '', registration: '', course: 'BCOM FIN', gender: '', signature: '' }]); setTitle('ASSIGNMENT TITLE'); setBody('Type your assignment here.\\n\\nUse the simple formatting controls above to organise your work. Your text will appear on the A4 page preview.'); };
+  const reset = () => { setDetails(initial); setGroupStudents([{ name: '', registration: '', course: 'BCOM FIN', gender: '', signature: '' }, { name: '', registration: '', course: 'BCOM FIN', gender: '', signature: '' }]); setTitle('ASSIGNMENT TITLE'); setBody(DEFAULT_BODY); };
 
   function applyFormat(command, value) {
     document.execCommand(command, false, value || null);

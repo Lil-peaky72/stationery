@@ -7,3 +7,22 @@
 /* Clearer official UDOM identity and group-order form */
 .brand-mark{width:48px;height:48px;flex:0 0 48px;padding:3px;background:#fff;border:1px solid #e6edf5;box-shadow:0 2px 8px #102b5612}.brand-mark img{width:100%;height:100%;object-fit:contain}.group-members-heading{display:grid;gap:4px;padding:10px 12px;background:#f2f7f6;border-left:3px solid var(--teal);border-radius:5px;color:var(--navy);font-size:11px}.group-members-heading small{font-size:10px;color:#718096;font-weight:500}.group-member-card{display:grid;gap:10px;border:1px solid #dce5eb;border-radius:8px;padding:12px;margin:0}.group-member-card legend{padding:0 6px;color:var(--teal);font-size:11px;font-weight:800}.group-member-card label{display:grid;gap:6px;font-size:10px;font-weight:700;color:#43536a}.group-member-card input{width:100%;border:1px solid #dce3eb;border-radius:6px;padding:10px;font-size:11px;color:var(--ink);outline:0;background:#fff}.group-member-card input:focus{border-color:var(--teal)}
 @media(max-width:650px){.brand-mark{width:42px;height:42px;flex-basis:42px}}
+
+.order-print-options{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}@media(max-width:420px){.order-print-options{grid-template-columns:1fr 1fr}}
+
+/* Pricing */
+.service-grid{grid-template-columns:repeat(4,1fr)}
+.service-rate{font-size:11px;font-weight:700;color:var(--teal);margin:12px 0 0;line-height:1.5}
+@media(max-width:1000px){.service-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.service-grid{grid-template-columns:1fr}}
+.field-note{display:block;margin-top:6px;font-size:10px;font-weight:500;color:#718096;line-height:1.5}
+.check-row{display:flex!important;align-items:center;gap:9px;font-size:12px;font-weight:600;color:var(--navy)}
+.check-row input{width:auto;accent-color:var(--navy)}
+.price-estimate{background:#f2f7f6;border:1px solid #d6e7e4;border-left:3px solid var(--teal);border-radius:8px;padding:14px;display:grid;gap:8px}
+.price-estimate-title{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--teal)}
+.price-line{display:flex;justify-content:space-between;gap:14px;font-size:12px;color:#43536a;line-height:1.5}
+.price-line b{white-space:nowrap;color:var(--navy)}
+.price-total{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #cfe0dd;padding-top:9px;margin-top:2px;color:var(--navy);font-size:13px;font-weight:700}
+.price-total strong{font-size:22px}
+.price-wait{margin:0;font-size:12px;color:#5b6b80}
+.price-estimate small{font-size:10px;color:#718096;line-height:1.6}
