@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from './lib/supabase.js';
 import DocumentStudio from './DocumentStudio.jsx';
 import { DEFAULT_PRICES, MAX_COPIES, MAX_PAGES, PAGE_BASED_TYPES, clampInt, formatTZS, mergePrices, priceOrder } from './lib/pricing.js';
-import { countPdfPages } from './lib/pdfPages.js';
+import { DOCUMENT_ACCEPT, DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, countDocumentPages, documentExtension, isAllowedDocument, storagePathFor } from './lib/documents.js';
 import {
   ArrowRight, BookOpen, Check, ChevronDown, Clock3, FileText,
   Headphones, Menu, Minus, Plus, Printer, Search, ShieldCheck,
@@ -33,7 +33,6 @@ function serviceRate(type, prices) {
   return '';
 }
 
-const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const PAPER_SIZES = ['A4', 'A3', 'Letter', 'Legal'];
 const COLOUR_MODES = ['Black & white', 'Colour'];
 
@@ -87,11 +86,18 @@ export default function App() {
     if (!file) { setPagesNote(''); return; }
     setCountingPages(true);
     setPagesNote('Counting pages…');
-    const count = await countPdfPages(file);
+    const { pages: count, kind } = await countDocumentPages(file);
     setCountingPages(false);
     if (count) {
       setPages(String(Math.min(count, MAX_PAGES)));
-      setPagesNote(count > MAX_PAGES ? `This PDF has ${count} pages. Please contact the shop for very large jobs.` : `${count} ${count === 1 ? 'page' : 'pages'} found in your PDF. You can change this if needed.`);
+      const noun = count === 1 ? 'page' : 'pages';
+      setPagesNote(count > MAX_PAGES
+        ? `This document has ${count} pages. Please contact the shop for very large jobs.`
+        : kind === 'docx'
+          ? `Word says your document has ${count} ${noun}. Please check this is right. You can change it.`
+          : `${count} ${noun} found in your PDF. You can change this if needed.`);
+    } else if (kind === 'doc') {
+      setPagesNote('Please type the number of pages. (Tip: saving your file as .docx or PDF lets us count them for you.)');
     } else {
       setPagesNote('We could not count the pages automatically. Please type the number of pages.');
     }
@@ -126,13 +132,13 @@ export default function App() {
     const fields = new FormData(event.currentTarget);
 
     // Hidden field that real customers never see; simple bots tend to fill it in.
-    if (fields.get('website')) return;
+    if (fields.get('contact_fax_hp')) return;
 
     const documentFile = fields.get('document_file');
     const hasFile = orderType !== 'Stationery purchase' && documentFile instanceof File && documentFile.size > 0;
 
     if (orderType === 'Printing' && !hasFile) {
-      flash('Please attach the PDF you want printed.');
+      flash('Please attach the document you want printed (PDF or Word).');
       return;
     }
     if (orderType !== 'Stationery purchase' && !quote.ready) {
@@ -140,22 +146,8 @@ export default function App() {
       return;
     }
     if (hasFile) {
-      const looksLikePdf = documentFile.type === 'application/pdf' || documentFile.name.toLowerCase().endsWith('.pdf');
-      if (!looksLikePdf) { flash('Please attach a PDF document.'); return; }
-      if (documentFile.size > MAX_PDF_BYTES) { flash('PDF must be 20 MB or smaller.'); return; }
-    }
-
-    setSavingOrder(true);
-    const reference = 'STN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
-
-    let filePath = null;
-    if (hasFile) {
-      const baseName = documentFile.name.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100) || 'document';
-      filePath = reference + '/' + baseName + '.pdf';
-      const { error: uploadError } = await supabase.storage
-        .from('print-jobs')
-        .upload(filePath, documentFile, { contentType: 'application/pdf', upsert: false });
-      if (uploadError) { setSavingOrder(false); flash('PDF upload failed. Please try again.'); return; }
+      if (!isAllowedDocument(documentFile)) { flash('Please attach a PDF or Word document (.pdf, .doc or .docx).'); return; }
+      if (documentFile.size > MAX_DOCUMENT_BYTES) { flash('The document must be 20 MB or smaller.'); return; }
     }
 
     const groupMembers = customerType === 'Group' ? Array.from({ length: groupMemberCount }, (_, index) => ({
@@ -169,6 +161,23 @@ export default function App() {
         ? `GROUP ORDER (${groupMembers.length} MEMBERS)\n${groupMembers.map((m, i) => `${i + 1}. ${m.full_name} | ${m.registration_number} | ${m.phone}`).join('\n')}`
         : 'INDIVIDUAL ORDER'
     ].filter(Boolean).join('\n\n');
+
+    setSavingOrder(true);
+    const reference = 'STN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+
+    let filePath = null;
+    if (hasFile) {
+      filePath = storagePathFor(reference, documentFile.name);
+      const { error: uploadError } = await supabase.storage
+        .from('print-jobs')
+        .upload(filePath, documentFile, { contentType: DOCUMENT_TYPES[documentExtension(documentFile.name)], upsert: false });
+      if (uploadError) {
+        console.error('Document upload failed', uploadError);
+        setSavingOrder(false);
+        flash('Could not upload your document. Please try again, or send it as a PDF.');
+        return;
+      }
+    }
 
     const order = {
       reference,
@@ -193,7 +202,7 @@ export default function App() {
     if (hasFile) {
       order.file_path = filePath;
       order.file_name = documentFile.name.slice(0, 200);
-      order.mime_type = 'application/pdf';
+      order.mime_type = DOCUMENT_TYPES[documentExtension(documentFile.name)];
     }
 
     let { error } = await supabase.from('orders').insert(order);
@@ -205,7 +214,11 @@ export default function App() {
       ({ error } = await supabase.from('orders').insert(basicOrder));
     }
     setSavingOrder(false);
-    if (error) { flash('Could not save your order. Please try again.'); return; }
+    if (error) {
+      console.error('Order could not be saved', error);
+      flash('Could not save your order. Please try again. (' + (error.code || 'error') + ')', 7000);
+      return;
+    }
     setLastOrderReference(reference);
     setCart([]);
     setModal('submitted');
@@ -364,7 +377,7 @@ export default function App() {
           <div className="modal-header"><div><span className="eyebrow">STATIONERY / STUDENT SERVICES</span><h2>{modal === 'cart' ? 'Your bag' : modal === 'track' ? 'Track an order' : modal === 'support' ? "We're here to help" : modal === 'order' ? 'Start an order' : 'Your request'}</h2></div><button className="close-modal" onClick={() => setModal('')} aria-label="Close"><X /></button></div>
           {modal === 'cart' && <div className="cart-content">{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={32} /><h3>Your bag is waiting</h3><p>Add stationery essentials from the shop to see them here.</p><button className="button button-primary" onClick={() => { setModal(''); scrollTo('shop'); }}>Browse the shop</button></div> : <><div className="cart-items">{cart.map((item) => <div className="cart-row" key={item.id}><span className="cart-emoji">{item.icon}</span><div className="cart-item-name"><b>{item.name}</b><small>{money(item.price)} each</small></div><div className="quantity"><button onClick={() => changeQuantity(item.id, -1)}><Minus size={13} /></button><span>{item.quantity}</span><button onClick={() => changeQuantity(item.id, 1)}><Plus size={13} /></button></div><b>{money(item.price * item.quantity)}</b></div>)}</div><div className="cart-total"><span>Estimated total</span><b>{money(cartTotal)}</b></div><p className="form-hint">Checkout and payment will be connected in a later development phase.</p><button className="button button-primary full-button" onClick={() => { setModal('order'); setOrderType('Stationery purchase'); }}>Continue with request <ArrowRight size={16} /></button></>}</div>}
           {modal === 'order' && <form className="order-form" onSubmit={submitOrder}>
-            <p className="form-intro">Tell us what you need and attach your PDF. Your order and document will be sent securely to the shop.</p>
+            <p className="form-intro">Tell us what you need and attach your PDF or Word document. Your order and document will be sent securely to the shop.</p>
             <label>What do you need?<select value={orderType} onChange={(e) => setOrderType(e.target.value)}><option>Printing</option><option>Photocopying</option><option>University form</option><option>Binding & finishing</option><option>Stationery purchase</option></select></label>
             <label>Order type<select value={customerType} onChange={(e) => setCustomerType(e.target.value)}><option>Individual</option><option>Group</option></select></label>
             {customerType === 'Group' && <>
@@ -376,7 +389,7 @@ export default function App() {
             <label>Student registration number <input name="registration_number" placeholder="e.g. T24-..." /></label>
             <label>Phone number <input name="phone" required type="tel" placeholder="+255 ..." /></label>
             {orderType !== 'Stationery purchase' && <>
-              {orderType !== 'Binding & finishing' && <label>{orderType === 'Printing' ? 'PDF document (maximum 20 MB)' : 'PDF document (optional, maximum 20 MB)'} <input name="document_file" type="file" accept="application/pdf,.pdf" required={orderType === 'Printing'} onChange={onDocumentChange} /></label>}
+              {orderType !== 'Binding & finishing' && <label>{orderType === 'Printing' ? 'Document: PDF or Word (maximum 20 MB)' : 'Document: PDF or Word (optional, maximum 20 MB)'} <input name="document_file" type="file" accept={DOCUMENT_ACCEPT} required={orderType === 'Printing'} onChange={onDocumentChange} /></label>}
               {PAGE_BASED_TYPES.includes(orderType) && <label>Number of pages <input name="pages" type="number" inputMode="numeric" min="1" max={MAX_PAGES} required value={pages} onChange={(e) => { setPages(e.target.value); setPagesNote(''); }} placeholder="Filled in automatically from your PDF" />
                 {pagesNote && <small className="field-note">{pagesNote}</small>}</label>}
               <div className="order-print-options">
@@ -392,12 +405,12 @@ export default function App() {
                       {quote.lines.map((line) => <div className="price-line" key={line.label}><span>{line.label}</span><b>{formatTZS(line.amount)}</b></div>)}
                       <div className="price-total"><span>Total</span><strong>{formatTZS(quote.total)}</strong></div>
                     </>
-                  : <p className="price-wait">{countingPages ? 'Counting the pages in your PDF…' : 'Attach your PDF or enter the number of pages to see your cost.'}</p>}
+                  : <p className="price-wait">{countingPages ? 'Counting the pages in your document…' : 'Attach your document or enter the number of pages to see your cost.'}</p>}
                 <small>Rates: black & white {formatTZS(prices.print_bw)} · colour {formatTZS(prices.print_colour)} · photocopy {formatTZS(prices.copy)} · university form {formatTZS(prices.form_page)} (each per page) · binding {formatTZS(prices.binding)} per document. The shop confirms the final amount when it checks your document.</small>
               </div>
             </>}
             <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}>
-              <label>Website <input name="website" tabIndex={-1} autoComplete="off" /></label>
+              <label>Leave this empty <input name="contact_fax_hp" tabIndex={-1} autoComplete="off" /></label>
             </div>
             <label>Anything else we should know? <textarea name="details" rows="3" placeholder="Optional: binding style, stapling, deadline…" /></label>
             <button className="button button-primary full-button" type="submit" disabled={savingOrder}>{savingOrder ? "Saving order..." : "Submit order"} <ArrowRight size={16} /></button>

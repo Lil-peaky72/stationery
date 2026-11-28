@@ -1,3 +1,4 @@
+import { isPdfPath } from './lib/documents.js';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from './lib/supabase.js';
 import AdminAnalytics from './AdminAnalytics.jsx';
@@ -99,7 +100,7 @@ export default function Admin() {
     });
   }, [orders, filter, query]);
 
-  const pending = orders.filter((order) => order.status === 'Pending' && order.file_path);
+  const pending = orders.filter((order) => order.status === 'Pending' && isPdfPath(order.file_path));
   const printerOptions = printerList.filter((item) => {
     const isUsb = /^USB/i.test(item.port || '');
     return connection === 'USB' ? isUsb : !isUsb;
@@ -155,7 +156,7 @@ export default function Admin() {
     const { data, error } = await supabase.storage.from('print-jobs').createSignedUrl(order.file_path, 120);
     if (error || !data?.signedUrl) {
       if (tab) tab.close();
-      notify('Could not open the PDF: ' + (error?.message || 'unknown error'));
+      notify('Could not open the file: ' + (error?.message || 'unknown error'));
       return;
     }
     if (tab) tab.location.href = data.signedUrl;
@@ -163,7 +164,8 @@ export default function Admin() {
   }
 
   async function printOrder(order) {
-    if (!order.file_path) { notify(order.reference + ' has no uploaded PDF.'); return false; }
+    if (!order.file_path) { notify(order.reference + ' has no uploaded document.'); return false; }
+    if (!isPdfPath(order.file_path)) { notify(order.reference + ' is a Word file. Open it, print it from Word, then set the status to Printed.'); return false; }
     if (!printer || !agentToken) { notify('Connect the print agent and choose a printer first.'); return false; }
 
     const { data: signed, error: signError } = await supabase.storage.from('print-jobs').createSignedUrl(order.file_path, 300);
@@ -212,7 +214,7 @@ export default function Admin() {
 
   async function printBatch() {
     const batch = selected.length
-      ? orders.filter((order) => selected.includes(order.id) && order.status === 'Pending' && order.file_path)
+      ? orders.filter((order) => selected.includes(order.id) && order.status === 'Pending' && isPdfPath(order.file_path))
       : pending;
     if (!batch.length) { notify('No pending PDF jobs to print.'); return; }
     if (!printer) { notify('Choose a printer first.'); return; }
@@ -340,7 +342,7 @@ export default function Admin() {
           <div className="admin-panel-title">
             <div>
               <h2>Order queue</h2>
-              <p>Change any order's status here. Only orders with an uploaded PDF can be printed.</p>
+              <p>Change any order's status here. Word files are opened and printed by hand (then set Printed); PDFs can be sent to the printer.</p>
             </div>
             <div className="admin-actions">
               <input className="admin-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search reference, name, phone…" aria-label="Search orders" />
@@ -366,7 +368,7 @@ export default function Admin() {
                         type="checkbox"
                         aria-label={'Select ' + order.reference}
                         checked={selected.includes(order.id)}
-                        disabled={order.status !== 'Pending' || !order.file_path}
+                        disabled={order.status !== 'Pending' || !isPdfPath(order.file_path)}
                         onChange={(e) => setSelected((current) => e.target.checked ? [...current, order.id] : current.filter((id) => id !== order.id))}
                       />
                     </td>
@@ -387,8 +389,8 @@ export default function Admin() {
                     </td>
                     <td>
                       {order.file_path
-                        ? <>{order.file_name || 'document.pdf'}<button className="admin-link" onClick={() => viewPdf(order)}>View PDF</button></>
-                        : <span className="admin-muted">No PDF attached</span>}
+                        ? <>{order.file_name || 'document.pdf'}<button className="admin-link" onClick={() => viewPdf(order)}>{isPdfPath(order.file_path) ? 'View PDF' : 'Open Word file'}</button></>
+                        : <span className="admin-muted">No document attached</span>}
                     </td>
                     <td>
                       <select
@@ -402,7 +404,7 @@ export default function Admin() {
                       </select>
                     </td>
                     <td>
-                      {order.file_path && PRINTABLE_STATUSES.includes(order.status)
+                      {isPdfPath(order.file_path) && PRINTABLE_STATUSES.includes(order.status)
                         ? <button className="admin-link" disabled={busy || !agentConnected || !printer} onClick={() => printOne(order)}>
                             {order.status === 'Printed' ? 'Reprint' : order.status === 'Failed' ? 'Retry' : 'Print'}
                           </button>

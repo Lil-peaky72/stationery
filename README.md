@@ -5,10 +5,10 @@ A student-focused printing and stationery storefront.
 ## What it does
 
 - Storefront with printing, photocopying and binding services, a stationery catalogue and a shopping bag
-- Order form that saves orders to Supabase, with a live cost estimate. The page count is read from the uploaded PDF
+- Order form that saves orders to Supabase, with a live cost estimate. Customers attach a PDF or Word file (.docx/.doc). The page count is read from the PDF or .docx
 - Order tracking by reference number
 - Student Document Studio (fixed UDOM cover page and A4 editor)
-- Admin page at `/admin`: sign in, see every order, change its status, view uploaded PDFs and send them to a printer through the Windows print agent
+- Admin page at `/admin`: sign in, see every order, change its status, open uploaded PDF/Word files, and send PDFs to a printer through the Windows print agent (Word files are printed by hand, then marked Printed)
 - Sales analytics in the admin page: sales per day or month, by service and by status, for any date range, plus an Excel (.xlsx) download of the same data
 
 Not built yet: payments and stock management. The stationery catalogue and its prices are sample data, and a stationery purchase total still comes from the shopping bag in the browser. Printing, photocopying, university form and binding totals are calculated by the database.
@@ -41,6 +41,7 @@ Run these files in the Supabase SQL editor, in this order:
 2. `supabase/printing-system.sql` — admin allowlist, PDF storage bucket, print columns and admin policies
 3. `supabase/printing-hardening.sql` — stricter checks on statuses, file paths and print options, and tighter permissions
 4. `supabase/pricing-and-analytics.sql` — price list, page counts, and server-side totals
+5. `supabase/word-documents.sql` — lets customers upload Word (.docx/.doc) as well as PDF
 
 Then create the first admin:
 
@@ -96,7 +97,7 @@ stationery/
 │   ├── lib/
 │   │   ├── supabase.js      Supabase client
 │   │   ├── pricing.js       price rules and cost breakdown
-│   │   ├── pdfPages.js      counts pages in a PDF
+│   │   ├── documents.js     PDF/Word file rules and page counting
 │   │   ├── analytics.js     date ranges and sales summaries
 │   │   └── exportExcel.js   builds the .xlsx report
 │   └── main.jsx
@@ -105,6 +106,7 @@ stationery/
 │   ├── printing-system.sql
 │   ├── printing-hardening.sql
 │   ├── pricing-and-analytics.sql
+│   ├── word-documents.sql
 │   └── seed-admin.sql
 └── windows-print-agent/     local service that sends PDFs to Windows printers
 ```
