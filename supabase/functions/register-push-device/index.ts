@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: corsHeaders });
 
   const authorization = req.headers.get('Authorization') || '';
-  const jwt = authorization.replace(/^Bearer\s+/i, '');
+  const jwt = authorization.replace(/^Bearer\\s+/i, '');
   if (!jwt) return new Response(JSON.stringify({ error: 'Sign in as an administrator first.' }), { status: 401, headers: corsHeaders });
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -34,9 +34,9 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json().catch(() => ({}));
-  const token = typeof body.token === 'string' ? body.token.trim() : '';
-  if (token.length < 40 || token.length > 8192) {
-    return new Response(JSON.stringify({ error: 'Invalid browser push token.' }), { status: 400, headers: corsHeaders });
+  const fid = typeof body.fid === 'string' ? body.fid.trim() : '';
+  if (fid.length < 10 || fid.length > 256) {
+    return new Response(JSON.stringify({ error: 'Invalid Firebase installation ID.' }), { status: 400, headers: corsHeaders });
   }
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -45,11 +45,11 @@ Deno.serve(async (req) => {
   const now = new Date().toISOString();
   const { error: saveError } = await adminClient.from('stationery_push_devices').upsert({
     user_id: userData.user.id,
-    token,
+    fid,
     user_agent: typeof body.userAgent === 'string' ? body.userAgent.slice(0, 500) : null,
     updated_at: now,
     last_seen_at: now
-  }, { onConflict: 'token' });
+  }, { onConflict: 'fid' });
 
   if (saveError) {
     console.error('Could not save Stationery push device:', saveError);
