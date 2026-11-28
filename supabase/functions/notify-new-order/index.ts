@@ -79,9 +79,22 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
+  // Only send to devices whose owners are still active in the existing admin allowlist.
+  const { data: activeAdmins, error: adminsError } = await supabase
+    .from('stationery_admins')
+    .select('user_id')
+    .eq('active', true);
+  if (adminsError) {
+    console.error('Could not load active Stationery administrators:', adminsError);
+    return new Response(JSON.stringify({ error: 'Could not load administrator access list.' }), { status: 500, headers: corsHeaders });
+  }
+  const adminIds = (activeAdmins || []).map((admin) => admin.user_id);
+  if (!adminIds.length) return new Response(JSON.stringify({ sent: 0, message: 'No active administrator devices are registered.' }), { status: 200, headers: corsHeaders });
+
   const { data: devices, error: devicesError } = await supabase
     .from('stationery_push_devices')
-    .select('fid');
+    .select('fid')
+    .in('user_id', adminIds);
   if (devicesError) {
     console.error('Could not load Stationery push devices:', devicesError);
     return new Response(JSON.stringify({ error: 'Could not load registered devices.' }), { status: 500, headers: corsHeaders });
