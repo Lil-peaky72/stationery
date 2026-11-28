@@ -1,0 +1,6 @@
+# Supabase Edge Function settings for Stationery.
+# The order webhook authenticates itself with STATIONERY_WEBHOOK_SECRET.
+[functions.notify-new-order]
+verify_jwt = false
+
+# register-push-device keeps the default JWT verification enabled.
