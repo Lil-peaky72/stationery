@@ -18,8 +18,6 @@ const firebaseReady = fetch('/api/firebase-config', { cache: 'no-store' })
       const title = data.title || 'New Stationery order';
       const options = {
         body: data.body || 'A new customer order has arrived.',
-        icon: '/favicon.ico',
-        badge: '/favicon.ico',
         data: { url: data.url || '/admin' },
         tag: data.reference || 'stationery-new-order',
         renotify: true
