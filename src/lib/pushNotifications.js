@@ -15,8 +15,8 @@ async function getFirebaseMessaging() {
       // Use Firebase's current FID-based registration API rather than the deprecated
       // legacy FCM registration-token API.
       const [appSdk, messagingSdk] = await Promise.all([
-        import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`),
-        import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-messaging.js`)
+        import(/* @vite-ignore */ `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`),
+        import(/* @vite-ignore */ `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-messaging.js`)
       ]);
       if (!(await messagingSdk.isSupported())) {
         throw new Error('This browser does not support web push notifications.');
@@ -52,20 +52,27 @@ export async function enableOrderNotifications() {
   await navigator.serviceWorker.ready;
 
   // FCM's current API returns a Firebase Installation ID through onRegistered().
+  let registrationTimeout;
+  let unsubscribe = () => {};
   const fidReady = new Promise((resolve, reject) => {
-    let unsubscribe = () => {};
-    const timeout = window.setTimeout(() => {
+    registrationTimeout = window.setTimeout(() => {
       unsubscribe();
       reject(new Error('Firebase did not finish registering this device. Please try again.'));
     }, 20000);
     unsubscribe = messagingSdk.onRegistered(messaging, (fid) => {
-      window.clearTimeout(timeout);
+      window.clearTimeout(registrationTimeout);
       unsubscribe();
       resolve(fid);
     });
   });
 
-  await messagingSdk.register(messaging, { vapidKey, serviceWorkerRegistration });
+  try {
+    await messagingSdk.register(messaging, { vapidKey, serviceWorkerRegistration });
+  } catch (error) {
+    window.clearTimeout(registrationTimeout);
+    unsubscribe();
+    throw error;
+  }
   const fid = await fidReady;
   if (!fid) throw new Error('Chrome did not provide a push registration. Please try again.');
 
