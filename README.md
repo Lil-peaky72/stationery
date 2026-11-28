@@ -70,6 +70,17 @@ The prices are stored in the `price_list` table and the database recalculates ev
 
 Open `/admin` and choose the Sales analytics tab. Pick a quick period or any From and To dates (Dar es Salaam time). "Sales" count every order except Cancelled and Failed, including orders still pending. Download Excel gives a workbook with four sheets: Summary, Orders (one row per order with filters, ready for pivot tables), Daily (or Monthly for long periods) and the service breakdown inside Summary.
 
+## Automatic deletion of documents
+
+Uploaded PDF and Word files are deleted 48 hours after the order is placed. The order record stays (customer, order type, pages, copies, prices, total, status, file name) so sales and analytics are not affected. The cleanup runs every day at 01:00 UTC (04:00 Dar es Salaam) from `api/cleanup-documents.js`, using Vercel Cron.
+
+One-time setup in Vercel (Project > Settings > Environment Variables, Production), then redeploy:
+
+- `CRON_SECRET`: any long random text (16+ characters)
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase > Project Settings > API > service_role secret. Keep it secret; never use a `VITE_` name for it.
+
+Print or open an order's file within 48 hours of the order.
+
 ## Printing from the admin page
 
 See `windows-print-agent/README.md` for the one-time setup on the shop's Windows computer.
@@ -88,7 +99,9 @@ See `windows-print-agent/README.md` for the one-time setup on the shop's Windows
 ```
 stationery/
 ├── index.html
-├── vercel.json              lets /admin open directly
+├── vercel.json              lets /admin open directly, daily cleanup schedule
+├── api/
+│   └── cleanup-documents.js deletes uploaded files after 48 hours
 ├── src/
 │   ├── App.jsx              storefront, order form, tracking
 │   ├── Admin.jsx            admin orders and printing (/admin)

@@ -390,7 +390,7 @@ export default function Admin() {
                     <td>
                       {order.file_path
                         ? <>{order.file_name || 'document.pdf'}<button className="admin-link" onClick={() => viewPdf(order)}>{isPdfPath(order.file_path) ? 'View PDF' : 'Open Word file'}</button></>
-                        : <span className="admin-muted">No document attached</span>}
+                        : <span className="admin-muted">{order.file_name ? order.file_name + ' (file deleted after 48 hours)' : 'No document attached'}</span>}
                     </td>
                     <td>
                       <select
