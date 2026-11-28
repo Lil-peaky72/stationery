@@ -1,8 +1,8 @@
 /* Firebase Cloud Messaging service worker for Stationery.
    Firebase's public web config is fetched from the Vercel API route; no private
    service-account credentials are ever sent to this file. */
-importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.12.1/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.12.1/firebase-messaging-compat.js');
 
 const firebaseReady = fetch('/api/firebase-config', { cache: 'no-store' })
   .then((response) => {
@@ -16,13 +16,12 @@ const firebaseReady = fetch('/api/firebase-config', { cache: 'no-store' })
     messaging.onBackgroundMessage((payload) => {
       const data = payload.data || {};
       const title = data.title || 'New Stationery order';
-      const options = {
+      self.registration.showNotification(title, {
         body: data.body || 'A new customer order has arrived.',
         data: { url: data.url || '/admin' },
         tag: data.reference || 'stationery-new-order',
         renotify: true
-      };
-      self.registration.showNotification(title, options);
+      });
     });
     return true;
   })
