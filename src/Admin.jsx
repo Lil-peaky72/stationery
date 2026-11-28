@@ -2,6 +2,7 @@ import { isPdfPath } from './lib/documents.js';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from './lib/supabase.js';
 import AdminAnalytics from './AdminAnalytics.jsx';
+import PushNotifications from './PushNotifications.jsx';
 import { formatTZS } from './lib/pricing.js';
 import './admin.css';
 
@@ -297,6 +298,7 @@ export default function Admin() {
           <button type="button" className={tab === 'analytics' ? 'active' : ''} onClick={() => setTab('analytics')}>Sales analytics</button>
         </nav>
 
+        {tab === 'orders' && <PushNotifications notify={notify} />}
         {tab === 'analytics' && <AdminAnalytics notify={notify} />}
 
         {tab === 'orders' && <>
