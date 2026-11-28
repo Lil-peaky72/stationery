@@ -70,6 +70,10 @@ The prices are stored in the `price_list` table and the database recalculates ev
 
 Open `/admin` and choose the Sales analytics tab. Pick a quick period or any From and To dates (Dar es Salaam time). "Sales" count every order except Cancelled and Failed, including orders still pending. Download Excel gives a workbook with four sheets: Summary, Orders (one row per order with filters, ready for pivot tables), Daily (or Monthly for long periods) and the service breakdown inside Summary.
 
+## Phone order notifications
+
+Optional Android Chrome push alerts can be added without changing checkout or printing. See [the setup guide](docs/order-push-notifications.md) for Firebase, Supabase Edge Function, and webhook configuration.
+
 ## Printing from the admin page
 
 See `windows-print-agent/README.md` for the one-time setup on the shop's Windows computer.

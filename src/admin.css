@@ -47,3 +47,6 @@
 .admin-loading{opacity:.55;pointer-events:none}
 @media(max-width:900px){.admin-kpis{grid-template-columns:repeat(2,1fr)}.admin-two-col{grid-template-columns:1fr}}
 @media(max-width:520px){.admin-dates{width:100%}.admin-dates label{flex:1}.admin-kpis strong{font-size:17px}}
+
+/* Order push notifications */
+.admin-push-panel{border-left:3px solid #23827e}.admin-push-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.admin-push-actions .admin-help{margin:0;flex:1 1 280px}.admin-push-actions .admin-primary{min-height:40px}@media(max-width:520px){.admin-push-actions{align-items:stretch;flex-direction:column}.admin-push-actions .admin-primary{width:100%}}
