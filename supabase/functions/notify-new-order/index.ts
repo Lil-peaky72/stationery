@@ -6,11 +6,11 @@ function base64url(input: string | Uint8Array) {
   const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input;
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  return btoa(binary).replace(/=/g, '').replace(/\\+/g, '-').replace(/\\//g, '_');
 }
 
 function pemToArrayBuffer(pem: string) {
-  const body = pem.replace(/-----BEGIN PRIVATE KEY-----/g, '').replace(/-----END PRIVATE KEY-----/g, '').replace(/\s/g, '');
+  const body = pem.replace(/-----BEGIN PRIVATE KEY-----/g, '').replace(/-----END PRIVATE KEY-----/g, '').replace(/\\s/g, '');
   const binary = atob(body);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
   });
   const { data: devices, error: devicesError } = await supabase
     .from('stationery_push_devices')
-    .select('token');
+    .select('fid');
   if (devicesError) {
     console.error('Could not load Stationery push devices:', devicesError);
     return new Response(JSON.stringify({ error: 'Could not load registered devices.' }), { status: 500, headers: corsHeaders });
@@ -100,12 +100,12 @@ Deno.serve(async (req) => {
 
     let sent = 0;
     let failed = 0;
-    const staleTokens: string[] = [];
-    await Promise.all(devices.map(async ({ token }) => {
+    const staleFids: string[] = [];
+    await Promise.all(devices.map(async ({ fid }) => {
       const response = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: { token, data, webpush: { headers: { Urgency: 'high' } } } })
+        body: JSON.stringify({ message: { fid, data, webpush: { headers: { Urgency: 'high' } } } })
       });
       if (response.ok) {
         sent++;
@@ -114,14 +114,14 @@ Deno.serve(async (req) => {
       failed++;
       const errorBody = await response.json().catch(() => ({}));
       const errorCode = errorBody?.error?.details?.find((item: { errorCode?: string }) => item.errorCode)?.errorCode;
-      if (response.status === 404 || errorCode === 'UNREGISTERED') staleTokens.push(token);
+      if (response.status === 404 || errorCode === 'UNREGISTERED') staleFids.push(fid);
       console.error('FCM send failed:', response.status, errorBody?.error?.message || 'Unknown FCM error');
     }));
 
-    if (staleTokens.length) {
-      await supabase.from('stationery_push_devices').delete().in('token', staleTokens);
+    if (staleFids.length) {
+      await supabase.from('stationery_push_devices').delete().in('fid', staleFids);
     }
-    return new Response(JSON.stringify({ sent, failed, removedStaleTokens: staleTokens.length }), { status: 200, headers: corsHeaders });
+    return new Response(JSON.stringify({ sent, failed, removedStaleDevices: staleFids.length }), { status: 200, headers: corsHeaders });
   } catch (error) {
     console.error('Stationery FCM notification failed:', error);
     return new Response(JSON.stringify({ error: 'Could not send push notifications.' }), { status: 500, headers: corsHeaders });
