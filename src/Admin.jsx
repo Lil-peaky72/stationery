@@ -389,8 +389,10 @@ export default function Admin() {
                     </td>
                     <td>
                       {order.file_path
-                        ? <>{order.file_name || 'document.pdf'}<button className="admin-link" onClick={() => viewPdf(order)}>{isPdfPath(order.file_path) ? 'View PDF' : 'Open Word file'}</button></>
-                        : <span className="admin-muted">No document attached</span>}
+                        ? <>{order.file_name || 'document'}<button className="admin-link" onClick={() => viewPdf(order)}>{isPdfPath(order.file_path) ? 'View PDF' : 'Open Word file'}</button></>
+                        : order.file_deleted_at
+                          ? <>{order.file_name || 'Document'}<small className="admin-muted">File auto-deleted after 48 hours</small><small>{formatDate(order.file_deleted_at)}</small></>
+                          : <span className="admin-muted">No document attached</span>}
                     </td>
                     <td>
                       <select
