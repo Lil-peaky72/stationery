@@ -81,7 +81,6 @@ export async function enableOrderNotifications() {
     const title = data.title || 'New Stationery order';
     const options = {
       body: data.body || 'A new customer order has arrived.',
-      icon: '/favicon.ico',
       data: { url: data.url || '/admin' }
     };
     if (Notification.permission === 'granted') new Notification(title, options);
